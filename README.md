@@ -22,7 +22,9 @@ fraud-detection/
 │   └── visualize.py        # Giai đoạn 6: biểu đồ trực quan
 ├── reports/
 │   ├── figures/            # biểu đồ xuất ra
-│   └── metrics_comparison.csv
+│   ├── metrics_comparison.csv
+│   ├── generate_report.py  # Giai đoạn 7: sinh báo cáo học thuật (Word)
+│   └── final_report.docx   # báo cáo học thuật hoàn chỉnh (sinh ra bởi generate_report.py)
 ├── run_pipeline.py         # script điều phối chạy toàn bộ pipeline
 ├── requirements.txt
 └── README.md
@@ -111,7 +113,22 @@ Script này sẽ:
 Sau đó chạy lại `python src/evaluate.py` và `python src/visualize.py` để cập nhật kết quả/biểu đồ
 với mô hình đã tinh chỉnh (evaluate.py tự động dùng ngưỡng trong `models/thresholds.json` nếu có).
 
-## 5. Ghi chú kỹ thuật
+## 5. Sinh báo cáo học thuật (Giai đoạn 7)
+
+Sau khi đã có `reports/metrics_comparison.csv` và `reports/figures/*.png` (chạy `run_pipeline.py`,
+khuyến nghị chạy thêm `tune_models.py` trước), sinh báo cáo Word hoàn chỉnh bằng:
+
+```bash
+python reports/generate_report.py
+```
+
+Script tự động đọc số liệu/biểu đồ MỚI NHẤT và ghi ra `reports/final_report.docx`, gồm đầy đủ:
+giới thiệu, cơ sở lý thuyết (Big Data/Spark, 3 thuật toán, các chỉ số đánh giá), kiến trúc hệ
+thống, kết quả thực nghiệm (bảng + biểu đồ + phân tích), kết luận & hướng phát triển, tài liệu
+tham khảo. Chạy lại script này bất cứ khi nào số liệu thay đổi (ví dụ sau khi tinh chỉnh mô hình
+lại) để cập nhật báo cáo.
+
+## 6. Ghi chú kỹ thuật
 
 - HDFS được mô phỏng bằng thư mục `data/raw` cục bộ; nếu chạy trên cluster thật, thay đường dẫn
   trong `src/config.py` bằng `hdfs://<namenode>:8020/data/raw/creditcard.csv`.
@@ -119,3 +136,13 @@ với mô hình đã tinh chỉnh (evaluate.py tự động dùng ngưỡng tron
   (`Class`) để đánh giá.
 - Vì dữ liệu mất cân bằng nặng, ưu tiên Precision/Recall/F1/PR-AUC hơn Accuracy/ROC-AUC.
 - Dùng time-based split (theo cột `Time`) thay vì random split để mô phỏng dự đoán giao dịch tương lai.
+- **Isolation Forest có Precision/PR-AUC thấp hơn hẳn 2 mô hình supervised** (Precision ~5% so với
+  80-95%) - đây KHÔNG phải lỗi, mà là hạn chế đã biết của phương pháp unsupervised: nó xác định
+  "bất thường" dựa trên việc bị cô lập trong toàn bộ không gian đặc trưng, không nhất thiết trùng
+  với các giao dịch gian lận thật (nhiều giao dịch hợp lệ nhưng có giá trị lớn/hiếm cũng bị coi là
+  bất thường). Đây là điểm quan trọng cần nêu khi so sánh trong báo cáo.
+- **Kết quả sau khi tinh chỉnh** (`tune_models.py`, xem mục 4): Grid Search chọn
+  Logistic Regression (regParam=0.1, elasticNetParam=0.5), Random Forest (numTrees=50, maxDepth=10);
+  cả 2 đều giữ chiến lược class-weight (tốt hơn SMOTE một chút trên PR-AUC nội bộ); ngưỡng phân loại
+  tối ưu: LR=0.759, RF=0.559 (thay vì mặc định 0.5) → Precision của Logistic Regression tăng từ
+  0.11 lên 0.80, Random Forest đạt Precision 0.95/Recall 0.70/F1 0.81 trên tập test.

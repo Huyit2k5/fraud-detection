@@ -16,3 +16,11 @@ seaborn>=0.13.2
 
 # Utilities
 joblib>=1.4.2
+
+# Notebooks (notebooks/*.ipynb)
+jupyter>=1.0.0
+nbclient>=0.10.0
+ipykernel>=6.29.0
+
+# Báo cáo (reports/generate_report.py)
+python-docx>=1.1.0
