@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Dữ liệu lớn / sinh ra, không đưa vào git
+data/raw/*.csv
+data/processed/*.parquet
+
+# Mô hình đã train
+models/
+
+# Kết quả xuất ra
+reports/figures/*.png
+reports/*.csv
+
+# Spark local logs
+spark-warehouse/
+metastore_db/
