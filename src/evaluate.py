@@ -33,7 +33,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from config import LABEL_COL, MODEL_FEATURE_COLS, MODELS_DIR, REPORTS_DIR, TEST_PARQUET_PATH
+from config import LABEL_COL, MODEL_FEATURE_COLS, MODELS_DIR, REPORTS_DIR, TEST_PARQUET_PATH, local_uri
 from spark_etl import get_spark_session
 from train_models import assemble_features
 
@@ -118,8 +118,8 @@ def run_evaluation():
         test_df = assemble_features(test_df)
         test_df.cache()
 
-        lr_model = LogisticRegressionModel.load(str(MODELS_DIR / "logistic_regression"))
-        rf_model = RandomForestClassificationModel.load(str(MODELS_DIR / "random_forest"))
+        lr_model = LogisticRegressionModel.load(local_uri(MODELS_DIR / "logistic_regression"))
+        rf_model = RandomForestClassificationModel.load(local_uri(MODELS_DIR / "random_forest"))
         iso_model = joblib.load(MODELS_DIR / "isolation_forest.joblib")
         thresholds = load_thresholds()
 

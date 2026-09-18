@@ -1,0 +1,43 @@
+# HDFS pseudo-cluster (single-node namenode + datanode) dùng để lưu trữ dữ liệu
+# thật thay vì mô phỏng bằng thư mục local. Xem README mục "HDFS pseudo-cluster".
+#
+# Chạy:   docker compose -f docker-compose.hdfs.yml up -d
+# Dừng:   docker compose -f docker-compose.hdfs.yml down
+# NameNode Web UI: http://localhost:9870
+# DataNode Web UI: http://localhost:9864
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    hostname: namenode
+    restart: unless-stopped
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    environment:
+      - CLUSTER_NAME=fraud-detection
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    hostname: datanode
+    restart: unless-stopped
+    depends_on:
+      - namenode
+    ports:
+      - "9864:9864"
+      - "9866:9866"
+      - "9867:9867"
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - SERVICE_PRECONDITION=namenode:9870
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+
+volumes:
+  hadoop_namenode:
+  hadoop_datanode:

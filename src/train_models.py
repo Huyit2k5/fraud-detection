@@ -23,6 +23,7 @@ from config import (
     RANDOM_SEED,
     TEST_PARQUET_PATH,
     TRAIN_WEIGHTED_PARQUET_PATH,
+    local_uri,
 )
 from spark_etl import get_spark_session
 
@@ -92,8 +93,8 @@ def run_training():
         rf_path = MODELS_DIR / "random_forest"
         iso_path = MODELS_DIR / "isolation_forest.joblib"
 
-        lr_model.write().overwrite().save(str(lr_path))
-        rf_model.write().overwrite().save(str(rf_path))
+        lr_model.write().overwrite().save(local_uri(lr_path))
+        rf_model.write().overwrite().save(local_uri(rf_path))
         joblib.dump(iso_model, iso_path)
 
         print(f"[Train] Đã lưu Logistic Regression -> {lr_path}")

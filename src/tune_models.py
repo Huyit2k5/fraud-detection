@@ -35,6 +35,7 @@ from config import (
     MODELS_DIR,
     TRAIN_BALANCED_PARQUET_PATH,
     TRAIN_WEIGHTED_PARQUET_PATH,
+    local_uri,
 )
 from spark_etl import get_spark_session, time_based_split
 from train_models import assemble_features
@@ -180,8 +181,8 @@ def run_tuning():
         # tham số đã chọn) và ngưỡng tối ưu ---
         lr_path = MODELS_DIR / "logistic_regression"
         rf_path = MODELS_DIR / "random_forest"
-        lr_final.write().overwrite().save(str(lr_path))
-        rf_final.write().overwrite().save(str(rf_path))
+        lr_final.write().overwrite().save(local_uri(lr_path))
+        rf_final.write().overwrite().save(local_uri(rf_path))
 
         thresholds = {
             "logistic_regression": {

@@ -23,7 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from config import RAW_CSV_PATH  # noqa: E402
+from config import DATA_BACKEND, RAW_CSV_DATA_PATH, RAW_CSV_PATH  # noqa: E402
 
 
 def _step(title, fn):
@@ -36,7 +36,20 @@ def _step(title, fn):
 
 
 def main():
-    if not RAW_CSV_PATH.exists():
+    if DATA_BACKEND == "hdfs":
+        from hdfs_utils import file_status
+
+        try:
+            exists = file_status("/data/raw/creditcard.csv") is not None
+        except Exception as e:
+            print(f"[Lỗi] Không kết nối được tới HDFS ({e}). "
+                  "Đảm bảo đã chạy 'docker compose -f docker-compose.hdfs.yml up -d'.")
+            sys.exit(1)
+        if not exists:
+            print(f"[Lỗi] Không tìm thấy {RAW_CSV_DATA_PATH}. "
+                  "Chạy 'python scripts/hdfs_bootstrap.py' để upload dữ liệu lên HDFS trước.")
+            sys.exit(1)
+    elif not RAW_CSV_PATH.exists():
         print(f"[Lỗi] Không tìm thấy dữ liệu thô tại {RAW_CSV_PATH}")
         print("Hãy tải creditcard.csv từ Kaggle vào data/raw/, hoặc chạy:")
         print("    python src/generate_synthetic_data.py")

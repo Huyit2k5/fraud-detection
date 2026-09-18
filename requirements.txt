@@ -24,3 +24,7 @@ ipykernel>=6.29.0
 
 # Báo cáo (reports/generate_report.py)
 python-docx>=1.1.0
+
+# Web dashboard (dashboard/app.py) + HDFS pseudo-cluster (src/hdfs_utils.py, scripts/hdfs_bootstrap.py)
+streamlit>=1.38.0
+requests>=2.32.0

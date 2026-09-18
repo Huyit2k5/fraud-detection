@@ -1,12 +1,12 @@
 """
 Giai đoạn 1-2 của kế hoạch: Chuẩn bị dữ liệu, khám phá (EDA) và làm sạch.
 
-- Đọc dữ liệu thô (mô phỏng đọc từ HDFS) bằng Spark DataFrame.
+- Đọc dữ liệu thô bằng Spark DataFrame, từ local hoặc HDFS thật tùy DATA_BACKEND (xem config.py).
 - EDA: phân phối class, missing values, thống kê Amount/Time.
 - Làm sạch: loại bỏ duplicate, xử lý missing.
 - Chuẩn hóa: chuẩn hóa cột Amount, Time bằng StandardScaler (Spark MLlib).
 - Chia tập train/test theo thời gian (time-based split).
-- Lưu kết quả ra Parquet trong data/processed/ (mô phỏng ghi lại lên HDFS).
+- Lưu kết quả ra Parquet trong data/processed/ (local hoặc HDFS tùy DATA_BACKEND).
 
 Chạy độc lập: python src/spark_etl.py
 """
@@ -19,9 +19,11 @@ from pyspark.sql import functions as F
 from config import (
     AMOUNT_SCALED_COL,
     CLEANED_PARQUET_PATH,
+    DATA_BACKEND,
     FEATURE_COLS,
+    HDFS_NAMENODE_URI,
     LABEL_COL,
-    RAW_CSV_PATH,
+    RAW_CSV_DATA_PATH,
     TEST_PARQUET_PATH,
     TIME_SCALED_COL,
     TRAIN_PARQUET_PATH,
@@ -30,7 +32,7 @@ from config import (
 
 
 def get_spark_session(app_name: str = "FraudDetectionETL") -> SparkSession:
-    return (
+    builder = (
         SparkSession.builder.appName(app_name)
         .master("local[*]")
         .config("spark.sql.shuffle.partitions", "8")
@@ -40,13 +42,20 @@ def get_spark_session(app_name: str = "FraudDetectionETL") -> SparkSession:
         # dùng đường dẫn chuyển đổi mặc định (chậm hơn nhưng ổn định).
         .config("spark.sql.execution.arrow.pyspark.enabled", "false")
         .config("spark.sql.execution.pythonUDF.arrow.enabled", "false")
-        .getOrCreate()
     )
+    if DATA_BACKEND == "hdfs":
+        builder = (
+            builder.config("spark.hadoop.fs.defaultFS", HDFS_NAMENODE_URI)
+            # Client (chạy trên host Windows) cần resolve hostname "namenode"/"datanode"
+            # bên trong docker network -> thêm entry vào hosts file (xem README), và bật
+            # cờ này để dùng đúng hostname DataNode thay vì IP nội bộ container.
+            .config("spark.hadoop.dfs.client.use.datanode.hostname", "true")
+        )
+    return builder.getOrCreate()
 
 
-def read_raw_data(spark: SparkSession, path=RAW_CSV_PATH) -> DataFrame:
-    """Đọc dữ liệu thô (CSV) bằng Spark. Trong triển khai thực tế,
-    thay `path` bằng đường dẫn HDFS, ví dụ: hdfs://namenode:8020/data/raw/creditcard.csv"""
+def read_raw_data(spark: SparkSession, path=RAW_CSV_DATA_PATH) -> DataFrame:
+    """Đọc dữ liệu thô (CSV) bằng Spark, từ local hoặc HDFS tùy DATA_BACKEND (xem config.py)."""
     df = (
         spark.read.option("header", True)
         .option("inferSchema", True)
@@ -56,15 +65,19 @@ def read_raw_data(spark: SparkSession, path=RAW_CSV_PATH) -> DataFrame:
 
 
 def explore_data(df: DataFrame) -> None:
-    """EDA cơ bản: số dòng, phân phối class, missing values, thống kê Amount."""
-    total = df.count()
-    print(f"[EDA] Tổng số giao dịch: {total:,}")
+    """EDA cơ bản: số dòng, phân phối class, missing values, thống kê Amount.
 
-    class_dist = df.groupBy(LABEL_COL).count().orderBy(LABEL_COL)
+    Chỉ 1 job Spark (groupBy + cache) cho cả tổng số dòng, phân phối class và tỉ lệ gian lận,
+    thay vì 3 job riêng biệt (count tổng, groupBy, filter+count) quét lại dữ liệu nhiều lần.
+    """
+    class_dist = df.groupBy(LABEL_COL).count().orderBy(LABEL_COL).cache()
+    counts = {row[LABEL_COL]: row["count"] for row in class_dist.collect()}
+    total = sum(counts.values())
+    fraud_ratio = counts.get(1, 0) / total * 100
+
+    print(f"[EDA] Tổng số giao dịch: {total:,}")
     print("[EDA] Phân phối class (0 = bình thường, 1 = gian lận):")
     class_dist.show()
-
-    fraud_ratio = df.filter(F.col(LABEL_COL) == 1).count() / total * 100
     print(f"[EDA] Tỉ lệ gian lận: {fraud_ratio:.4f}%")
 
     print("[EDA] Số lượng missing values theo cột:")

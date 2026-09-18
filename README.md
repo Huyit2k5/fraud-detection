@@ -58,6 +58,19 @@ Nếu chưa có, cài OpenJDK 17, ví dụ qua winget: `winget install EclipseAd
    set HADOOP_HOME=D:\fraud-detection\hadoop
    set PATH=%JAVA_HOME%\bin;%HADOOP_HOME%\bin;%PATH%
    ```
+   **Nếu máy có nhiều JDK cài song song** (ví dụ vừa có JDK 11 vừa có JDK 17) và biến `JAVA_HOME`
+   cấp hệ thống (System/User Environment Variables) đang trỏ nhầm vào JDK 11, PySpark sẽ báo lỗi
+   `UnsupportedClassVersionError` / `LinkageError khi loading main class org.apache.spark.launcher.Main`
+   dù bạn đã set `JAVA_HOME` đúng ở bước trên trong terminal hiện tại — vì biến hệ thống chỉ mất tác
+   dụng ở phiên đang mở, các terminal/tiến trình mới (kể cả `streamlit run dashboard/app.py`) vẫn kế
+   thừa giá trị sai đó nếu bạn không set lại trong đúng terminal đó. Kiểm tra nhanh:
+   `java -version` (bản đang chạy) và
+   `[Environment]::GetEnvironmentVariable("JAVA_HOME","Machine")` (PowerShell, xem biến hệ thống).
+   Cách sửa triệt để: đổi biến `JAVA_HOME` hệ thống (Windows Settings → Environment Variables) trỏ
+   thẳng vào JDK 17. Dashboard (`dashboard/app.py`) đã tự động dò và ưu tiên JDK 17 cho các subprocess
+   nó chạy (ETL/pipeline) nên không cần sửa gì thêm nếu chỉ dùng qua dashboard — nhưng khi chạy trực
+   tiếp `python run_pipeline.py`/`python src/spark_etl.py` từ terminal, bạn vẫn cần tự set đúng
+   `JAVA_HOME` như trên.
 2. **Phiên bản pandas**: nếu dùng Python rất mới (3.13+/3.14), `pip install pandas` có thể cài
    pandas >= 3.0, hiện PySpark **chưa hỗ trợ đầy đủ pandas 3.x** (dễ gây lỗi crash Python worker khi
    `toPandas()`/UDF). Dự án này đã test ổn định với **pandas 2.3.3** — nếu gặp lỗi tương tự, chạy:
@@ -128,10 +141,64 @@ thống, kết quả thực nghiệm (bảng + biểu đồ + phân tích), kế
 tham khảo. Chạy lại script này bất cứ khi nào số liệu thay đổi (ví dụ sau khi tinh chỉnh mô hình
 lại) để cập nhật báo cáo.
 
-## 6. Ghi chú kỹ thuật
+## 6. HDFS pseudo-cluster (tùy chọn) + Web dashboard
 
-- HDFS được mô phỏng bằng thư mục `data/raw` cục bộ; nếu chạy trên cluster thật, thay đường dẫn
-  trong `src/config.py` bằng `hdfs://<namenode>:8020/data/raw/creditcard.csv`.
+Mặc định pipeline chạy ở chế độ `DATA_BACKEND=local` (dữ liệu nằm ở `data/` trên đĩa, như mục 3-4 ở
+trên). Nếu muốn dữ liệu thực sự nằm trên HDFS (namenode + datanode, single-node pseudo-cluster) thay vì
+chỉ mô phỏng, làm theo các bước sau (cần Docker Desktop đang chạy):
+
+1. Khởi động HDFS pseudo-cluster:
+   ```bash
+   docker compose -f docker-compose.hdfs.yml up -d
+   ```
+   Kiểm tra NameNode Web UI tại http://localhost:9870 (mục "Live Nodes" phải là 1).
+
+2. **Chỉ trên Windows**: thêm 2 dòng sau vào file hosts (`C:\Windows\System32\drivers\etc\hosts`, cần
+   quyền Admin để sửa) để Spark (chạy trên host) resolve được hostname của container:
+   ```
+   127.0.0.1 namenode
+   127.0.0.1 datanode
+   ```
+
+3. Upload dữ liệu thô lên HDFS:
+   ```bash
+   python scripts/hdfs_bootstrap.py
+   ```
+   Xem file vừa upload tại http://localhost:9870/explorer.html#/data/raw
+
+4. Bật chế độ HDFS rồi chạy pipeline như bình thường:
+   ```bash
+   set DATA_BACKEND=hdfs
+   python run_pipeline.py
+   ```
+   Dữ liệu đã xử lý (`cleaned.parquet`, `train.parquet`, `test.parquet`...) sẽ được ghi vào
+   `/data/processed/` trên HDFS thay vì `data/processed/` local. Bỏ biến `DATA_BACKEND` (hoặc set về
+   `local`) để quay lại chế độ cũ.
+
+5. Xem web dashboard trực quan hóa toàn bộ pipeline (dữ liệu trên HDFS, log ETL, so sánh mô hình,
+   biểu đồ):
+   ```bash
+   streamlit run dashboard/app.py
+   ```
+
+Dừng cluster: `docker compose -f docker-compose.hdfs.yml down` (thêm `-v` nếu muốn xóa luôn dữ liệu
+HDFS đã lưu trong volume).
+
+## 7. Ghi chú kỹ thuật
+
+- Mặc định (`DATA_BACKEND=local`) HDFS được mô phỏng bằng thư mục `data/` cục bộ. Xem mục 6 để chạy
+  với HDFS pseudo-cluster thật (Docker) bằng cách set `DATA_BACKEND=hdfs`.
+- `notebooks/01_eda.ipynb` và `notebooks/02_preprocessing_spark.ipynb` đọc dữ liệu qua
+  `RAW_CSV_DATA_PATH` (tôn trọng `DATA_BACKEND`, giống `src/spark_etl.py`), không phải `RAW_CSV_PATH`
+  (luôn là đường dẫn local) — nếu tự viết notebook/script mới đọc dữ liệu thô, dùng
+  `RAW_CSV_DATA_PATH` để không vô tình bỏ qua chế độ HDFS.
+- Khi `DATA_BACKEND=hdfs`, `run_pipeline.py` kiểm tra dữ liệu thô đã có trên HDFS trước khi chạy
+  (qua WebHDFS) và báo lỗi rõ ràng ngay nếu chưa `hdfs_bootstrap.py` hoặc cluster chưa lên — thay vì
+  để Spark khởi động xong rồi mới crash giữa chừng với stack trace Java khó hiểu.
+- `dashboard/app.py` tự động dò và luôn ưu tiên JDK 17 cài trên máy (không phụ thuộc biến `JAVA_HOME`
+  hệ thống, kể cả khi biến đó trỏ sai sang JDK khác) cho các subprocess ETL/pipeline nó chạy — nhưng
+  khi chạy trực tiếp `python run_pipeline.py`/`python src/spark_etl.py` từ terminal (không qua
+  dashboard), bạn vẫn cần tự set đúng `JAVA_HOME` như hướng dẫn ở mục 2.
 - Isolation Forest là mô hình unsupervised, không dùng nhãn khi huấn luyện nhưng vẫn dùng nhãn thật
   (`Class`) để đánh giá.
 - Vì dữ liệu mất cân bằng nặng, ưu tiên Precision/Recall/F1/PR-AUC hơn Accuracy/ROC-AUC.
