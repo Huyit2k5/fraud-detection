@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* Bảng màu đã duyệt ở phác thảo (inference-v2): nền tối hợp máy chiếu, đỏ = rủi ro, xanh lá = an toàn. */
+@theme {
+  --color-ink: #0b1020;
+  --color-panel: #121a2e;
+  --color-panel-2: #18223a;
+  --color-line: #25314d;
+  --color-text: #e6ebf5;
+  --color-muted: #8b98b5;
+  --color-action: #38bdf8;
+  --color-safe: #22c55e;
+  --color-risk: #ef4444;
+  --color-warn: #f59e0b;
+  --font-sans: var(--font-be-vietnam), system-ui, sans-serif;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum" 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-action);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
