@@ -22,6 +22,8 @@ MODELS_DIR = ROOT_DIR / "models"
 # Backend lưu trữ dữ liệu: "local" (mặc định, thư mục data/ trên đĩa) hoặc "hdfs"
 # (HDFS pseudo-cluster chạy bằng docker-compose.hdfs.yml — xem README).
 DATA_BACKEND = os.environ.get("DATA_BACKEND", "local").strip().lower()
+# Số luồng Spark (local[N]) - mặc định 4 để máy laptop vẫn chạy mượt khi demo.
+SPARK_CORES = int(os.environ.get("SPARK_CORES", "4"))
 HDFS_NAMENODE_URI = os.environ.get("HDFS_NAMENODE_URI", "hdfs://localhost:9000")
 HDFS_WEBHDFS_URL = os.environ.get("HDFS_WEBHDFS_URL", "http://localhost:9870")
 
@@ -68,13 +70,30 @@ PCA_COLS = [f"V{i}" for i in range(1, 29)]
 # FEATURE_COLS: dùng cho EDA/trực quan hóa (Time, Amount ở thang đo GỐC, dễ đọc/diễn giải)
 FEATURE_COLS = [TIME_COL, AMOUNT_COL] + PCA_COLS
 
-# MODEL_FEATURE_COLS: dùng để HUẤN LUYỆN mô hình. Time/Amount đã chuẩn hóa (StandardScaler)
-# thành Time_scaled/Amount_scaled để cùng thang đo với V1..V28 (~N(0,1)) - quan trọng với
-# Isolation Forest và Logistic Regression, nếu không Time/Amount (biên độ lớn) sẽ lấn át tín hiệu
-# của các thành phần PCA.
+# Đặc trưng giờ trong ngày, tạo từ cột Time (số giây kể từ giao dịch đầu tiên, dữ liệu kéo dài
+# 48 giờ) với giả định giao dịch đầu tiên diễn ra lúc 0h:
+# - Hour (0-23): chỉ dùng để hiển thị/vẽ biểu đồ.
+# - Hour_sin/Hour_cos: mã hóa giờ theo vòng tròn (vị trí kim đồng hồ) để 23h và 0h nằm sát nhau,
+#   giúp cả Logistic Regression học được quy luật "ban đêm rủi ro cao" (không đơn điệu theo giờ).
+SECONDS_PER_DAY = 86_400
+HOUR_COL = "Hour"
+HOUR_SIN_COL = "Hour_sin"
+HOUR_COS_COL = "Hour_cos"
+
+# MODEL_FEATURE_COLS: dùng để HUẤN LUYỆN mô hình. Amount đã chuẩn hóa (StandardScaler) thành
+# Amount_scaled để cùng thang đo với V1..V28 (~N(0,1)) - quan trọng với Isolation Forest và
+# Logistic Regression, nếu không Amount (biên độ lớn) sẽ lấn át tín hiệu của các thành phần PCA.
+# KHÔNG dùng Time_scaled: Time chỉ tăng dần và vì chia train/test theo thời gian, mọi giá trị Time
+# của tập test đều nằm ngoài khoảng giá trị của tập train -> đặc trưng này gây nhiễu. Thông tin
+# thời gian được đưa vào qua Hour_sin/Hour_cos.
 TIME_SCALED_COL = "Time_scaled"
 AMOUNT_SCALED_COL = "Amount_scaled"
-MODEL_FEATURE_COLS = [TIME_SCALED_COL, AMOUNT_SCALED_COL] + PCA_COLS
+MODEL_FEATURE_COLS = [HOUR_SIN_COL, HOUR_COS_COL, AMOUNT_SCALED_COL] + PCA_COLS
+
+# Tham số StandardScaler (mean/std của Amount, Time) học được ở bước ETL - dùng lại khi suy luận.
+SCALER_PARAMS_PATH = MODELS_DIR / "feature_scaler.json"
+# Gói suy luận (mô hình dạng JSON + dữ liệu) cho giao diện web, xuất ở bước đánh giá.
+INFERENCE_DIR = MODELS_DIR / "inference"
 
 # Tỉ lệ chia tập train/test theo thời gian (time-based split)
 TRAIN_RATIO = 0.7

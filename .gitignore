@@ -16,3 +16,10 @@ reports/*.csv
 # Spark local logs
 spark-warehouse/
 metastore_db/
+
+# Brainstorm mockup, hình/số liệu sinh cho báo cáo
+.superpowers/
+reports/figures/report/
+reports/report_stats.json
+frontend/node_modules/
+frontend/.next/
