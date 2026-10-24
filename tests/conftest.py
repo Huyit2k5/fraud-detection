@@ -7,6 +7,14 @@ import pytest
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR / "src"))
 sys.path.insert(0, str(ROOT_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+
+@pytest.fixture
+def fake_bundle_dir(tmp_path):
+    from fake_bundle import write_fake_bundle
+
+    return write_fake_bundle(tmp_path / "inference")
 
 
 @pytest.fixture(scope="session")
