@@ -4,7 +4,6 @@ Giai đoạn 1-2 của kế hoạch: Chuẩn bị dữ liệu, khám phá (EDA) 
 - Đọc dữ liệu thô bằng Spark DataFrame, từ local hoặc HDFS thật tùy DATA_BACKEND (xem config.py).
 - EDA: phân phối class, missing values, thống kê Amount/Time, phân tích ngoại lệ (IQR) của Amount.
 - Làm sạch: loại bỏ duplicate, xử lý missing.
-- Tạo đặc trưng giờ trong ngày (Hour, Hour_sin, Hour_cos) từ cột Time.
 - Chuẩn hóa: chuẩn hóa cột Amount, Time bằng StandardScaler (Spark MLlib), lưu tham số scaler.
 - Chia tập train/test theo thời gian (time-based split).
 - Lưu kết quả ra Parquet trong data/processed/ (local hoặc HDFS tùy DATA_BACKEND).
@@ -13,7 +12,6 @@ Chạy độc lập: python src/spark_etl.py
 """
 
 import json
-import math
 import os
 import sys
 from pathlib import Path
@@ -30,13 +28,9 @@ from config import (
     DATA_BACKEND,
     FEATURE_COLS,
     HDFS_NAMENODE_URI,
-    HOUR_COL,
-    HOUR_COS_COL,
-    HOUR_SIN_COL,
     LABEL_COL,
     RAW_CSV_DATA_PATH,
     SCALER_PARAMS_PATH,
-    SECONDS_PER_DAY,
     SPARK_CORES,
     TEST_PARQUET_PATH,
     TIME_COL,
@@ -150,21 +144,6 @@ def clean_data(df: DataFrame) -> DataFrame:
     return df
 
 
-def add_hour_features(df: DataFrame) -> DataFrame:
-    """Tạo đặc trưng giờ trong ngày từ Time (số giây kể từ giao dịch đầu tiên), giả định giao dịch
-    đầu tiên diễn ra lúc 0h:
-    - Hour (0-23): giờ trong ngày, dùng để hiển thị/vẽ biểu đồ.
-    - Hour_sin, Hour_cos: vị trí "kim đồng hồ" của giờ (dùng giờ có phần lẻ, vd. 1,5 = 1h30) để
-      23h và 0h nằm sát nhau - dùng làm đặc trưng cho mô hình."""
-    hour_frac = (F.col(TIME_COL) % SECONDS_PER_DAY) / 3600.0
-    angle = 2 * math.pi * hour_frac / 24
-    return (
-        df.withColumn(HOUR_COL, F.floor(hour_frac).cast("int"))
-        .withColumn(HOUR_SIN_COL, F.sin(angle))
-        .withColumn(HOUR_COS_COL, F.cos(angle))
-    )
-
-
 def _assemble_amount_time(df: DataFrame) -> DataFrame:
     assembler = VectorAssembler(inputCols=[AMOUNT_COL, TIME_COL], outputCol="amount_time_vec")
     return assembler.transform(df)
@@ -223,9 +202,6 @@ def run_etl():
         df = read_raw_data(spark)
         explore_data(df)
         df = clean_data(df)
-        df = add_hour_features(df)
-        print(f"[ETL] Thêm đặc trưng giờ: {HOUR_COL}, {HOUR_SIN_COL}, {HOUR_COS_COL} "
-              "(giả định giao dịch đầu tiên lúc 0h)")
         scaler_model = fit_amount_time_scaler(df)
         save_scaler_params(scaler_model, SCALER_PARAMS_PATH)
         print(f"[ETL] Đã lưu tham số chuẩn hóa -> {SCALER_PARAMS_PATH}")

@@ -82,13 +82,10 @@ def test_choose_model():
 def test_rates():
     from export_inference import compute_rates
 
-    train = pd.DataFrame({"Amount": [0.5, 0.5, 5, 600], "Class": [1, 0, 0, 1], "Hour": [2, 2, 14, 2]})
+    train = pd.DataFrame({"Amount": [0.5, 0.5, 5, 600], "Class": [1, 0, 0, 1]})
     r = compute_rates(train)
 
     assert r["amount_buckets"][0] == {"label": "<1 €", "lo": 0, "hi": 1, "n": 2, "fraud": 1, "rate": 0.5}
     assert r["amount_buckets"][-1]["hi"] is None
-    assert r["hours"][2]["rate"] == pytest.approx(2 / 3)
-    assert r["hours"][14] == {"hour": 14, "n": 1, "fraud": 0, "rate": 0.0}
-    assert r["hours"][5] == {"hour": 5, "n": 0, "fraud": 0, "rate": 0.0}
-    assert len(r["hours"]) == 24
+    assert "hours" not in r
     assert r["overall_rate"] == pytest.approx(0.5)

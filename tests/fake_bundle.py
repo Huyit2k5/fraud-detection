@@ -30,15 +30,11 @@ TREES = [_tree(0.6, 0.95, 0.01, 0.3), _tree(0.7, 0.9, 0.02, 0.2), _tree(0.5, 0.9
 
 def _frame(n: int, t0: float, rng, span: float) -> pd.DataFrame:
     time = np.sort(rng.uniform(t0, t0 + span, n))
-    hour_frac = (time % 86_400) / 3600
     amount = np.round(rng.exponential(80, n), 2)
     df = pd.DataFrame(rng.normal(size=(n, len(MODEL_FEATURE_COLS))), columns=MODEL_FEATURE_COLS)
-    df["Hour_sin"] = np.sin(2 * np.pi * hour_frac / 24)
-    df["Hour_cos"] = np.cos(2 * np.pi * hour_frac / 24)
     df["Amount_scaled"] = (amount - AMOUNT_MEAN) / AMOUNT_STD
     df.insert(0, "Class", (df["V14"] < -1.2).astype(int))
     df.insert(0, "Amount", amount)
-    df.insert(0, "Hour", np.floor(hour_frac).astype(int))
     df.insert(0, "Time", time)
     df.insert(0, "tx_id", np.arange(n))
     return df

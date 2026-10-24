@@ -43,7 +43,6 @@ from config import (  # noqa: E402
     AMOUNT_COL,
     CLEANED_PARQUET_PATH,
     FEATURE_COLS,
-    HOUR_COL,
     LABEL_COL,
     MODEL_FEATURE_COLS,
     MODELS_DIR,
@@ -67,7 +66,6 @@ MODEL_COLORS = {"Logistic Regression": BLUE, "Random Forest": GREEN, "Isolation 
 
 AMOUNT_EDGES = [0, 1, 10, 50, 100, 500, 1000, float("inf")]
 AMOUNT_LABELS = ["<1", "1–10", "10–50", "50–100", "100–500", "500–1.000", ">1.000"]
-HOUR_BLOCKS = ["0–4h", "4–8h", "8–12h", "12–16h", "16–20h", "20–24h"]
 
 plt.rcParams.update({
     "font.family": ["Times New Roman", "DejaVu Serif"],
@@ -267,17 +265,6 @@ def compute_data_stats(spark) -> tuple[dict, dict]:
     amount_rows["rate"] = amount_rows["fraud"] / amount_rows["n"]
     tables["amount_buckets"] = amount_rows.to_dict("records")
 
-    hour_rows = (cleaned.groupBy(HOUR_COL).agg(F.count("*").alias("n"), F.sum(LABEL_COL).alias("fraud"))
-                 .orderBy(HOUR_COL).toPandas())
-    hour_rows["rate"] = hour_rows["fraud"] / hour_rows["n"]
-    tables["hours"] = hour_rows.to_dict("records")
-
-    cross = (cleaned.withColumn("bucket", _bucket_expr(F.col(AMOUNT_COL)))
-             .withColumn("block", F.floor(F.col(HOUR_COL) / 4).cast("int"))
-             .groupBy("block", "bucket").agg(F.count("*").alias("n"), F.sum(LABEL_COL).alias("fraud"))
-             .toPandas())
-    tables["hour_amount_cross"] = cross.to_dict("records")
-
     s["outliers"] = analyze_amount_outliers(cleaned)
     s["outliers"]["by_class"] = {str(k): v for k, v in s["outliers"]["by_class"].items()}
 
@@ -324,7 +311,7 @@ def compute_model_scores(spark) -> pd.DataFrame:
     test = assemble_features(spark.read.parquet(str(TEST_PARQUET_PATH)))
     lr = LogisticRegressionModel.load(local_uri(MODELS_DIR / "logistic_regression"))
     rf = RandomForestClassificationModel.load(local_uri(MODELS_DIR / "random_forest"))
-    keep = [TIME_COL, HOUR_COL, AMOUNT_COL, LABEL_COL] + MODEL_FEATURE_COLS
+    keep = [TIME_COL, AMOUNT_COL, LABEL_COL] + MODEL_FEATURE_COLS
     base = lr.transform(test).withColumn("lr_score", vector_to_array("probability")[1]).select(
         keep + ["lr_score", "features"])
     pdf = rf.transform(base.withColumnRenamed("probability", "p0")).withColumn(
@@ -385,51 +372,6 @@ def fig_amount(tables, s):
         a.tick_params(axis="x", rotation=20)
     fig.tight_layout()
     save(fig, "gian_lan_theo_so_tien")
-
-
-def fig_hour(tables, s):
-    df = pd.DataFrame(tables["hours"])
-    fig, a1 = plt.subplots(figsize=(11, 4.2))
-    a1.bar(df[HOUR_COL], df["n"], color=BLUE, alpha=0.45, label="Số giao dịch")
-    a1.set_xlabel("Giờ trong ngày (giả định giao dịch đầu tiên lúc 0h)")
-    a1.set_ylabel("Số giao dịch")
-    a1.set_xticks(range(24))
-    a2 = a1.twinx()
-    a2.plot(df[HOUR_COL], df["rate"] * 100, color=RED, marker="o", lw=2, label="Tỉ lệ gian lận")
-    a2.set_ylabel("Tỉ lệ gian lận (%)", color=RED)
-    a2.grid(False)
-    a2.spines["right"].set_visible(True)
-    peak = df.loc[df["rate"].idxmax()]
-    a2.annotate(f"{int(peak[HOUR_COL])}h: {vn(peak['rate'] * 100, 2)}%", (peak[HOUR_COL], peak["rate"] * 100),
-                xytext=(peak[HOUR_COL] + 2, peak["rate"] * 100), color=RED,
-                arrowprops={"arrowstyle": "->", "color": RED})
-    h1, l1 = a1.get_legend_handles_labels()
-    h2, l2 = a2.get_legend_handles_labels()
-    a1.legend(h1 + h2, l1 + l2, loc="lower center", bbox_to_anchor=(0.5, 1.06), ncol=2, frameon=False)
-    a1.set_title("Số giao dịch và tỉ lệ gian lận theo giờ trong ngày", pad=30)
-    save(fig, "gian_lan_theo_gio")
-
-
-def fig_hour_amount(tables):
-    df = pd.DataFrame(tables["hour_amount_cross"])
-    n = df.pivot(index="block", columns="bucket", values="n").reindex(index=range(6), columns=range(7))
-    f = df.pivot(index="block", columns="bucket", values="fraud").reindex(index=range(6), columns=range(7))
-    rate = (f / n * 100).fillna(0)
-    fig, ax = plt.subplots(figsize=(10, 4.4))
-    im = ax.imshow(rate.values, cmap="Reds", aspect="auto")
-    ax.set_xticks(range(7), AMOUNT_LABELS)
-    ax.set_yticks(range(6), HOUR_BLOCKS)
-    ax.set_xlabel("Khoảng số tiền (€)")
-    ax.set_ylabel("Khung giờ")
-    ax.grid(False)
-    for i in range(6):
-        for j in range(7):
-            v = rate.values[i, j]
-            ax.text(j, i, f"{vn(v, 2)}%", ha="center", va="center", fontsize=9,
-                    color="white" if v > rate.values.max() * 0.55 else "#222")
-    fig.colorbar(im, ax=ax, label="Tỉ lệ gian lận (%)")
-    ax.set_title("Tỉ lệ gian lận theo khung giờ × khoảng số tiền")
-    save(fig, "gio_x_so_tien")
 
 
 def fig_outliers(tables, s):
@@ -600,7 +542,7 @@ def fig_threshold(pdf: pd.DataFrame, thr: float):
 def fig_importance(pdf: pd.DataFrame):
     imp = pdf.attrs["rf_importance"].iloc[:15][::-1]
     fig, ax = plt.subplots(figsize=(9, 5))
-    colors = [AMBER if c.startswith(("Hour", "Amount")) else GREEN for c in imp.index]
+    colors = [AMBER if c.startswith("Amount") else GREEN for c in imp.index]
     ax.barh(imp.index, imp.values, color=colors)
     ax.set_xlabel("Mức độ quan trọng (giảm impurity trung bình)")
     ax.set_title("15 đặc trưng quan trọng nhất của Random Forest")
@@ -635,28 +577,6 @@ def fig_suspicious(pdf: pd.DataFrame, thr: float) -> dict:
     caught = groups["Gian lận – phát hiện đúng (TP)"]
     return {"blocked_amount": float(pdf.loc[caught, AMOUNT_COL].sum()),
             "fraud_amount_test": float(pdf.loc[y == 1, AMOUNT_COL].sum())}
-
-
-def fig_hour_feature_gain(before: pd.DataFrame, after: pd.DataFrame):
-    cols = ["precision", "recall", "f1_score", "pr_auc"]
-    names = ["Precision", "Recall", "F1-score", "PR-AUC"]
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-    for ax, model in zip(axes, ["Logistic Regression", "Random Forest"]):
-        b = before.set_index("model").loc[model, cols].values.astype(float)
-        a = after.set_index("model").loc[model, cols].values.astype(float)
-        x = np.arange(len(cols))
-        ax.bar(x - 0.2, b, 0.4, color=GRAY, label="Trước (Time_scaled)")
-        ax.bar(x + 0.2, a, 0.4, color=MODEL_COLORS[model], label="Sau (Hour_sin, Hour_cos)")
-        for xi, (vb, va) in enumerate(zip(b, a)):
-            ax.text(xi - 0.2, vb + 0.01, vn(vb, 2), ha="center", fontsize=8.5)
-            ax.text(xi + 0.2, va + 0.01, vn(va, 2), ha="center", fontsize=8.5)
-        ax.set_xticks(x, names)
-        ax.set_ylim(0, 1.1)
-        ax.set_title(model)
-        ax.legend(fontsize=9, loc="upper left")
-    fig.suptitle("Ảnh hưởng của đặc trưng giờ (cùng tham số mặc định, ngưỡng 0,5)", weight="bold")
-    fig.tight_layout()
-    save(fig, "anh_huong_dac_trung_gio")
 
 
 def fig_tuning(tuning: dict):
@@ -710,8 +630,6 @@ def main():
     diagram_time_split(stats)
     fig_class_balance(stats)
     fig_amount(tables, stats)
-    fig_hour(tables, stats)
-    fig_hour_amount(tables)
     fig_outliers(tables, stats)
     fig_correlation(tables)
     fig_corr_with_class(tables)
@@ -723,10 +641,6 @@ def main():
     fig_threshold(pdf, rf_thr)
     fig_importance(pdf)
     stats.update(fig_suspicious(pdf, rf_thr))
-    before_path = REPORTS_DIR / "metrics_before_hour.csv"
-    after_path = REPORTS_DIR / "metrics_after_hour_untuned.csv"
-    if before_path.exists() and after_path.exists():
-        fig_hour_feature_gain(pd.read_csv(before_path), pd.read_csv(after_path))
     fig_tuning(tuning)
 
     stats["rf_importance_top"] = pdf.attrs["rf_importance"].iloc[:10].to_dict()

@@ -4,7 +4,7 @@ DẠNG của file mẫu (reports/template/report_template.docx - tạo bởi bui
 
 Mọi con số, bảng và hình đều lấy từ kết quả thật của pipeline:
 - reports/report_stats.json + reports/figures/report/*.png  (sinh bởi reports/make_figures.py)
-- reports/metrics_comparison.csv, metrics_before_hour.csv, metrics_after_hour_untuned.csv
+- reports/metrics_comparison.csv
 - models/thresholds.json, models/tuning_results.json, models/feature_scaler.json
 
 Chạy:  python reports/make_figures.py  &&  python reports/generate_report.py
@@ -256,8 +256,6 @@ def load_inputs() -> dict:
         "s": data["stats"],
         "t": data["tables"],
         "m": pd.read_csv(REPORTS_DIR / "metrics_comparison.csv").set_index("model"),
-        "before": pd.read_csv(REPORTS_DIR / "metrics_before_hour.csv").set_index("model"),
-        "after": pd.read_csv(REPORTS_DIR / "metrics_after_hour_untuned.csv").set_index("model"),
         "th": json.loads((MODELS_DIR / "thresholds.json").read_text(encoding="utf-8")),
         "tu": json.loads(tuning_path.read_text(encoding="utf-8")) if tuning_path.exists() else {},
         "sc": json.loads((MODELS_DIR / "feature_scaler.json").read_text(encoding="utf-8")),
@@ -393,8 +391,8 @@ def chapter1(R: Report, d: dict):
     R.bullets([
         "Quy trình xử lý dữ liệu tự động trên HDFS và Spark, chạy lại được bằng một lệnh.",
         "Bộ mô hình đã huấn luyện và tinh chỉnh, cùng bảng so sánh định lượng giữa các mô hình.",
-        "Hệ thống biểu đồ trực quan hóa dữ liệu và kết quả, giúp rút ra các thông tin có giá trị như khung "
-        "giờ, khoảng số tiền có rủi ro gian lận cao.",
+        "Hệ thống biểu đồ trực quan hóa dữ liệu và kết quả, giúp rút ra các thông tin có giá trị như các "
+        "khoảng số tiền có rủi ro gian lận cao.",
         "Ứng dụng web minh họa: giám sát dòng giao dịch, cảnh báo giao dịch nghi vấn và giải thích lý do.",
     ])
 
@@ -533,14 +531,6 @@ def chapter2(R: Report, d: dict):
     R.para("trong đó c(n) là độ dài đường đi trung bình chuẩn hóa với n mẫu; s gần 1 nghĩa là rất bất "
            "thường. Tham số contamination xác định tỉ lệ điểm được coi là bất thường.")
 
-    R.h2("Tạo đặc trưng thời gian dạng chu kỳ")
-    R.para("Các đại lượng có tính chu kỳ như giờ trong ngày không nên biểu diễn trực tiếp bằng số 0–23, vì "
-           "khi đó mô hình coi 23h và 0h cách nhau rất xa trong khi thực tế chỉ cách 1 giờ. Cách phổ biến là "
-           "ánh xạ giờ lên đường tròn đơn vị bằng hai đặc trưng sin và cos (tương tự vị trí kim đồng hồ):")
-    R.formula("Hour_sin = sin(2π · h / 24),        Hour_cos = cos(2π · h / 24)")
-    R.para("Với cách biểu diễn này, các thời điểm gần nhau trong ngày có tọa độ gần nhau, và một mô hình "
-           "tuyến tính có thể học được quy luật dạng “ban đêm rủi ro cao” vốn không đơn điệu theo giờ.")
-
     R.h2("Các độ đo đánh giá mô hình")
     R.para(f"Kết quả phân lớp nhị phân được tổng hợp trong ma trận nhầm lẫn ({R.next_table_ref()}), từ đó "
            "tính các độ đo.")
@@ -605,7 +595,7 @@ def chapter3(R: Report, d: dict):
            "tệp run_pipeline.py điều phối chạy toàn bộ quy trình.")
     R.table("Các mô-đun chính của hệ thống", ["Tệp mã nguồn", "Chức năng"], [
         ["src/config.py", "Cấu hình đường dẫn (local/HDFS), danh sách đặc trưng, tham số chung"],
-        ["src/spark_etl.py", "Đọc dữ liệu từ HDFS, EDA, làm sạch, phân tích ngoại lệ, tạo đặc trưng giờ, chuẩn "
+        ["src/spark_etl.py", "Đọc dữ liệu từ HDFS, EDA, làm sạch, phân tích ngoại lệ, chuẩn "
                              "hóa, chia tập theo thời gian, ghi Parquet"],
         ["src/imbalance.py", "Tính trọng số lớp, sinh dữ liệu SMOTE"],
         ["src/train_models.py", "Huấn luyện Logistic Regression, Random Forest (MLlib), Isolation Forest"],
@@ -669,21 +659,6 @@ def chapter3(R: Report, d: dict):
            "nhỏ trước khi thực hiện giao dịch lớn. Như vậy số tiền một mình không đủ để phát hiện gian lận.")
     R.figure("gian_lan_theo_so_tien", "Tỉ lệ gian lận và tổng tiền gian lận theo khoảng số tiền")
 
-    hours = pd.DataFrame(t["hours"]).set_index("Hour")
-    peak_h = int(hours["rate"].idxmax())
-    day_rate = hours.loc[9:21, "fraud"].sum() / hours.loc[9:21, "n"].sum()
-    R.h3("Gian lận theo giờ trong ngày")
-    R.para("Cột Time chỉ là số giây kể từ giao dịch đầu tiên. Từ cột này, nhóm suy ra giờ trong ngày với giả "
-           "định giao dịch đầu tiên diễn ra lúc 0h; giả định này được củng cố bởi dữ liệu: số giao dịch thấp "
-           f"nhất rơi vào khoảng 1h–6h, đúng nhịp sinh hoạt ban đêm ({R.next_figure_ref()}). Kết quả cho thấy "
-           f"**lúc {peak_h}h tỉ lệ gian lận lên tới {pct(hours.loc[peak_h, 'rate'])}**, cao gấp khoảng "
-           f"{vn(hours.loc[peak_h, 'rate'] / day_rate, 0)} lần mức trung bình ban ngày 9h–21h ({pct(day_rate)}): "
-           "ban đêm ít giao dịch hợp lệ nhưng kẻ gian vẫn hoạt động.")
-    R.figure("gian_lan_theo_gio", "Số giao dịch và tỉ lệ gian lận theo giờ trong ngày")
-    R.para(f"Kết hợp hai yếu tố, {R.next_figure_ref()} cho thấy các tổ hợp khung giờ – khoảng số tiền có "
-           "rủi ro cao nhất; đây là kiểu tương tác mà các mô hình dạng cây có thể học được.")
-    R.figure("gio_x_so_tien", "Tỉ lệ gian lận theo khung giờ và khoảng số tiền")
-
     cwc = t["corr_with_class"]
     top4 = s["top_corr_features"]
     R.h3("Quan hệ giữa các đặc trưng")
@@ -724,23 +699,13 @@ def chapter3(R: Report, d: dict):
            "giao dịch gian lận vốn là các điểm bất thường, loại bỏ ngoại lệ sẽ làm mất chính tín hiệu cần học. "
            "Ảnh hưởng của biên độ lớn được xử lý bằng chuẩn hóa (với Logistic Regression), còn Random Forest và "
            "Isolation Forest vốn ít nhạy với ngoại lệ.")
-    R.h3("Tạo đặc trưng giờ trong ngày")
-    R.para(f"Nhóm tạo thêm các đặc trưng từ cột Time như {R.next_table_ref()}. Đặc trưng Time_scaled (Time "
-           "chuẩn hóa) bị **loại khỏi mô hình** vì Time chỉ tăng dần theo thời gian; khi chia tập theo thời gian, "
-           "mọi giá trị Time của tập test đều lớn hơn tập train nên mô hình phải dự đoán trên vùng giá trị chưa "
-           "từng thấy. Thông tin thời gian được đưa vào mô hình qua cặp Hour_sin, Hour_cos.")
-    R.table("Các đặc trưng được tạo thêm", ["Đặc trưng", "Công thức", "Mục đích"], [
-        ["Hour", "⌊(Time mod 86400) / 3600⌋", "Giờ trong ngày (0–23), dùng hiển thị, thống kê"],
-        ["Hour_sin", "sin(2π·h/24), h = (Time mod 86400)/3600", "Đặc trưng giờ dạng chu kỳ cho mô hình"],
-        ["Hour_cos", "cos(2π·h/24)", "Đặc trưng giờ dạng chu kỳ cho mô hình"],
-        ["Amount_scaled", "(Amount − μ) / σ", "Số tiền đã chuẩn hóa cho mô hình"],
-    ], [3.2, 6.6, 6.2])
     R.h3("Chuẩn hóa dữ liệu")
     R.para("Amount được chuẩn hóa bằng StandardScaler của Spark MLlib về phân phối có trung bình 0, độ lệch "
            f"chuẩn 1, với tham số học được μ = {vn(sc['amount_mean'], 4)} € và σ = {vn(sc['amount_std'], 4)} €. "
            "Tham số được lưu lại (models/feature_scaler.json) để ứng dụng dùng đúng phép biến đổi khi suy luận. "
-           "Bộ đặc trưng cuối cùng đưa vào mô hình gồm 31 đặc trưng: Hour_sin, Hour_cos, Amount_scaled và "
-           "V1–V28.")
+           "Bộ đặc trưng đưa vào mô hình gồm 29 đặc trưng: Amount_scaled và V1–V28. Cột Time không được "
+           "đưa vào mô hình: Time chỉ tăng dần theo thời gian, và khi chia tập theo thời gian, mọi giá trị Time "
+           "của tập test đều lớn hơn tập train nên mô hình sẽ phải dự đoán trên vùng giá trị chưa từng thấy.")
     R.h3("Chia tập huấn luyện và kiểm tra theo thời gian")
     R.para(f"Dữ liệu được chia theo thời gian với tỉ lệ 70/30 ({R.next_figure_ref()}): {vn(s['train_rows'])} "
            f"giao dịch đầu tiên ({vn(s['train_fraud'])} gian lận) để huấn luyện, {vn(s['test_rows'])} giao dịch "
@@ -835,37 +800,17 @@ def chapter3(R: Report, d: dict):
            + ", ".join(top_imp) + ", khớp với các đặc trưng có tương quan mạnh với nhãn ở phần khảo sát dữ liệu.")
     R.figure("do_quan_trong_dac_trung", "Mức độ quan trọng của đặc trưng trong Random Forest", 14)
 
-    R.h3("Ảnh hưởng của đặc trưng giờ")
-    b, a = d["before"], d["after"]
-    rows = []
-    for name in ["Logistic Regression", "Random Forest", "Isolation Forest"]:
-        rows.append([name, f"{vn(b.loc[name, 'f1_score'], 4)} → {vn(a.loc[name, 'f1_score'], 4)}",
-                     f"{vn(b.loc[name, 'pr_auc'], 4)} → {vn(a.loc[name, 'pr_auc'], 4)}",
-                     f"{vn(b.loc[name, 'recall'], 4)} → {vn(a.loc[name, 'recall'], 4)}"])
-    R.para("Để đánh giá khách quan đặc trưng mới, nhóm huấn luyện các mô hình với cùng tham số mặc định và "
-           f"ngưỡng 0,5, chỉ thay Time_scaled bằng Hour_sin, Hour_cos ({R.next_table_ref()}, {R.next_figure_ref()}).")
-    R.table("So sánh trước và sau khi thay Time_scaled bằng đặc trưng giờ (tham số mặc định, ngưỡng 0,5)",
-            ["Mô hình", "F1-score", "PR-AUC", "Recall"], rows, [4.0, 4.0, 4.0, 4.0],
-            ["left", "center", "center", "center"])
-    R.figure("anh_huong_dac_trung_gio", "Ảnh hưởng của đặc trưng giờ đến các độ đo")
-    d_rf = a.loc["Random Forest", "pr_auc"] - b.loc["Random Forest", "pr_auc"]
-    R.para("Kết quả cho thấy đặc trưng giờ **gần như không làm thay đổi độ chính xác** của Random Forest "
-           f"(PR-AUC thay đổi {vn(d_rf, 4)}): phần lớn thông tin phân biệt gian lận đã nằm trong V1–V28. Tuy "
-           "nhiên đặc trưng giờ vẫn được giữ lại vì hai lý do: (1) loại bỏ được đặc trưng Time_scaled không hợp "
-           "lệ về mặt phương pháp như đã phân tích; (2) giúp **giải thích kết quả bằng ngôn ngữ dễ hiểu** "
-           "(“giao dịch lúc 3 giờ sáng”) trong ứng dụng – điều mà các thành phần ẩn danh V1–V28 không làm được.")
-
     R.h3("Phân tích và thảo luận")
     R.bullets([
         f"**Random Forest là mô hình tốt nhất** với F1-score {vn(rf['f1_score'], 4)} và PR-AUC "
         f"{vn(rf['pr_auc'], 4)}: cân bằng tốt giữa phát hiện gian lận và hạn chế báo nhầm, nhờ học được quan "
         "hệ phi tuyến giữa các đặc trưng. Mô hình này được chọn cho ứng dụng.",
-        f"**Logistic Regression** cho thấy rõ ảnh hưởng của ngưỡng phân loại: ở ngưỡng mặc định 0,5 mô hình "
-        f"có Recall {vn(d['after'].loc['Logistic Regression', 'recall'], 4)} nhưng Precision chỉ "
-        f"{vn(d['after'].loc['Logistic Regression', 'precision'], 4)} (cảnh báo quá nhiều giao dịch bình "
-        f"thường do trọng số lớp rất lớn); sau khi tối ưu ngưỡng, Precision tăng lên {vn(lr['precision'], 4)} "
-        f"nhưng Recall giảm còn {vn(lr['recall'], 4)}. Với ranh giới quyết định tuyến tính, mô hình không đạt "
-        "được đồng thời cả hai như Random Forest.",
+        f"**Logistic Regression** đạt Precision {vn(lr['precision'], 4)} và Recall {vn(lr['recall'], 4)} "
+        f"(F1-score {vn(lr['f1_score'], 4)}): "
+        + ("ngưỡng tối ưu cao giúp hạn chế báo nhầm nhưng bỏ sót nhiều giao dịch gian lận. "
+           if lr["precision"] > lr["recall"] else
+           "mô hình phát hiện được nhiều gian lận nhưng báo nhầm nhiều giao dịch bình thường. ")
+        + "Với ranh giới quyết định tuyến tính, mô hình không đạt được đồng thời cả hai như Random Forest.",
         f"**Isolation Forest** có Precision rất thấp ({vn(iso['precision'], 4)}). Đây không phải lỗi cài đặt "
         "mà là hạn chế đã biết của phương pháp không giám sát: thuật toán tìm các điểm “khác biệt” trong toàn "
         "bộ không gian đặc trưng, trong khi nhiều giao dịch hợp lệ cũng khác biệt (số tiền lớn, hành vi hiếm) "
@@ -893,13 +838,12 @@ def chapter3(R: Report, d: dict):
     n_trees = s["rf_params"]["numTrees"]
     R.bullets([
         f"Ở cuối bước đánh giá, mô hình tốt nhất (Random Forest, {n_trees} cây) được **xuất sang dạng JSON** cùng "
-        "dữ liệu train/test và tỉ lệ gian lận theo khoảng tiền, theo giờ (gói suy luận models/inference/).",
+        "dữ liệu train/test và tỉ lệ gian lận theo khoảng tiền (gói suy luận models/inference/).",
         "Backend nạp gói này một lần và chấm điểm bằng NumPy, **không cần khởi động Spark** cho mỗi yêu cầu. Xác "
         "suất tính lại được kiểm tra tự động trùng với Spark (sai số dưới 10⁻¹⁶); toàn bộ "
         f"{vn(s['test_rows'])} giao dịch của tập test được chấm trong chưa đến 1 giây.",
         "Giải thích dùng thuật toán TreeSHAP trên chính các cây của mô hình; đóng góp của V1–V28 được cộng gộp "
-        "thành lý do “hành vi thẻ”, của Hour_sin + Hour_cos thành “giờ giao dịch”, của Amount_scaled thành “số "
-        "tiền”. Năm giao dịch tương tự được tìm bằng thuật toán láng giềng gần nhất trên tập train.",
+        "thành lý do “hành vi thẻ”, của Amount_scaled thành “số tiền”. Năm giao dịch tương tự được tìm bằng thuật toán láng giềng gần nhất trên tập train.",
         "Chế độ giám sát trực tiếp dùng WebSocket: backend phát lại các giao dịch của tập test theo đúng thứ tự "
         "thời gian, frontend hiển thị và cập nhật bộ đếm theo thời gian thực.",
     ])
@@ -922,10 +866,10 @@ def chapter3(R: Report, d: dict):
     R.bullets([
         "**Kết luận** (nghi gian lận / an toàn), mức rủi ro so với ngưỡng cảnh báo đã tinh chỉnh, và đề xuất "
         "hành động (tạm giữ và xác minh với chủ thẻ, hoặc duyệt).",
-        "**Ba lý do bằng lời** – hành vi thẻ, giờ giao dịch, số tiền – mỗi lý do có thanh độ lớn và màu cho biết "
-        "đẩy về phía gian lận (đỏ) hay an toàn (xanh), kèm tỉ lệ gian lận thực tế của khung giờ, khoảng tiền đó.",
+        "**Hai lý do bằng lời** – hành vi thẻ và số tiền – mỗi lý do có thanh độ lớn và màu cho biết đẩy về "
+        "phía gian lận (đỏ) hay an toàn (xanh), kèm tỉ lệ gian lận thực tế của khoảng tiền đó.",
         "**Năm giao dịch giống nhất trong quá khứ** cùng kết quả thật của chúng.",
-        "**Thử thay đổi giao dịch:** kéo thanh số tiền, giờ để xem mô hình chấm lại ngay lập tức.",
+        "**Thử thay đổi số tiền:** kéo thanh số tiền để xem mô hình chấm lại ngay lập tức.",
         "Nút **“Xem kết quả thật”** lật nhãn thật để đối chiếu mô hình đoán đúng hay sai.",
     ])
     R.figure("app_kiem_tra", "Kiểm tra một giao dịch: kết luận, lý do, giao dịch tương tự và thử thay đổi",
@@ -938,7 +882,6 @@ def chapter3(R: Report, d: dict):
     R.bullets([
         "Dữ liệu chỉ gồm 2 ngày giao dịch; các đặc trưng V1–V28 đã ẩn danh nên không thể tạo thêm đặc trưng "
         "nghiệp vụ (lịch sử chi tiêu theo thẻ, vị trí, thiết bị…).",
-        "Giờ trong ngày được suy ra từ giả định giao dịch đầu tiên lúc 0h.",
         "HDFS và Spark chạy trên một máy (pseudo-cluster), chưa đánh giá hiệu năng trên cụm nhiều máy.",
         "Xử lý theo lô; chưa triển khai xử lý luồng thời gian thực bằng Spark Structured Streaming.",
     ])
@@ -952,14 +895,15 @@ def conclusion(R: Report, d: dict):
            "thường trên nền tảng Big Data:")
     R.bullets([
         "Lưu trữ dữ liệu trên HDFS (pseudo-cluster bằng Docker) và xử lý bằng Spark DataFrame song song: khảo "
-        "sát, làm sạch (loại trùng lặp, phân tích ngoại lệ), tạo đặc trưng giờ, chuẩn hóa và chia tập theo "
+        "sát, làm sạch (loại trùng lặp, phân tích ngoại lệ), chuẩn hóa và chia tập theo "
         "thời gian.",
         "Xử lý dữ liệu mất cân bằng bằng class weight và SMOTE; huấn luyện, tinh chỉnh (Grid Search + "
         "Cross-Validation, tối ưu ngưỡng) và so sánh 3 mô hình.",
         f"Mô hình tốt nhất – Random Forest – đạt Precision {vn(rf['precision'], 4)}, Recall "
         f"{vn(rf['recall'], 4)}, F1-score {vn(rf['f1_score'], 4)}, PR-AUC {vn(rf['pr_auc'], 4)} trên tập test.",
-        "Trực quan hóa dữ liệu rút ra các thông tin có giá trị: khung giờ ban đêm và một số khoảng số tiền có "
-        "rủi ro gian lận cao vượt trội; xây dựng ứng dụng minh họa có giải thích kết quả.",
+        "Trực quan hóa dữ liệu rút ra các thông tin có giá trị như các khoảng số tiền có rủi ro gian lận cao "
+        "vượt trội và khuôn mẫu tương quan riêng của giao dịch gian lận; xây dựng ứng dụng minh họa có giải "
+        "thích kết quả.",
     ])
     R.para("**Hướng phát triển.**")
     R.bullets([

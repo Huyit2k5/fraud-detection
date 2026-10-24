@@ -1,8 +1,6 @@
 """Dịch vụ suy luận cho tab "Suy luận": kết luận + giải thích bằng lời cho người không chuyên,
 giao dịch tương tự trong quá khứ, thử "nếu… thì…" và phát lại luồng giao dịch của tập test."""
 
-import math
-
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
@@ -11,7 +9,6 @@ from config import AMOUNT_COL, LABEL_COL, PCA_COLS, SECONDS_PER_DAY, TIME_COL
 
 GROUPS = {
     "behavior": PCA_COLS,
-    "hour": ["Hour_sin", "Hour_cos"],
     "amount": ["Amount_scaled"],
 }
 BEHAVIOR_DETAIL = "Tổng hợp từ 28 dấu hiệu đã được ngân hàng mã hóa để bảo mật"
@@ -21,10 +18,6 @@ HIGHLIGHT_RATIO = 1.5  # chỉ nói "gấp k lần mức chung" khi tỉ lệ ca
 def time_parts(time_s: float) -> tuple[int, int, int]:
     """(ngày thứ mấy, giờ, phút) từ số giây kể từ giao dịch đầu tiên (giả định bắt đầu lúc 0h)."""
     return (int(time_s // SECONDS_PER_DAY) + 1, int(time_s % SECONDS_PER_DAY // 3600), int(time_s % 3600 // 60))
-
-
-def part_of_day(hour: int) -> str:
-    return "sáng" if hour <= 10 else ("chiều" if hour <= 17 else "tối")
 
 
 def vn_number(x: float, digits: int = 0) -> str:
@@ -48,7 +41,6 @@ class InferenceService:
         self.train = bundle.train.reset_index(drop=True)
         self._nn = NearestNeighbors(n_neighbors=5).fit(self.train[self.features].to_numpy())
         self._overall = bundle.rates["overall_rate"]
-        self._hour_rate = {h["hour"]: h["rate"] for h in bundle.rates["hours"]}
         self._times = self.test[TIME_COL].to_numpy()  # test đã sắp theo Time khi xuất gói
 
     # ------------------------------------------------------------------ chọn giao dịch
@@ -70,25 +62,19 @@ class InferenceService:
         return self._explain(row[self.features].to_numpy(dtype=float), row, float(row[AMOUNT_COL]),
                              float(row[TIME_COL]), what_if=False)
 
-    def what_if(self, tx_id: int, amount: float, hour: int) -> dict:
+    def what_if(self, tx_id: int, amount: float) -> dict:
+        """Chấm lại giao dịch nếu số tiền khác đi (chuẩn hóa bằng đúng mean/std đã học ở ETL)."""
         row = self.test.loc[tx_id]
         x = row[self.features].to_numpy(dtype=float).copy()
-        time_s = float(row[TIME_COL])
-        frac = (time_s % 3600) / 3600  # giữ nguyên phút của giao dịch gốc
-        h = hour + frac
-        x[self.features.index("Hour_sin")] = math.sin(2 * math.pi * h / 24)
-        x[self.features.index("Hour_cos")] = math.cos(2 * math.pi * h / 24)
         x[self.features.index("Amount_scaled")] = (amount - self.bundle.meta["amount_mean"]) / self.bundle.meta["amount_std"]
-        day = int(time_s // SECONDS_PER_DAY)
-        new_time = day * SECONDS_PER_DAY + h * 3600
-        return self._explain(x, row, float(amount), new_time, what_if=True)
+        return self._explain(x, row, float(amount), float(row[TIME_COL]), what_if=True)
 
     def _explain(self, x: np.ndarray, row, amount: float, time_s: float, what_if: bool) -> dict:
         prob = float(self.bundle.runtime.predict_proba(x[None])[0])
         exp = self.bundle.runtime.explain(x)
         day, hour, minute = time_parts(time_s)
         contrib = dict(zip(self.features, exp.contributions))
-        reasons = [self._reason(key, sum(contrib[f] for f in cols), amount, hour)
+        reasons = [self._reason(key, sum(contrib[f] for f in cols), amount)
                    for key, cols in GROUPS.items()]
         reasons.sort(key=lambda r: abs(r["contribution"]), reverse=True)
         technical = sorted(
@@ -104,20 +90,12 @@ class InferenceService:
             "neighbors": neighbors, "neighbors_fraud": sum(n["label"] for n in neighbors),
         }
 
-    def _reason(self, key: str, contribution: float, amount: float, hour: int) -> dict:
+    def _reason(self, key: str, contribution: float, amount: float) -> dict:
         direction = "fraud" if contribution > 0 else "safe"
         if key == "behavior":
             title = ("Hành vi thẻ rất khác thường so với giao dịch bình thường" if direction == "fraud"
                      else "Hành vi thẻ giống các giao dịch bình thường")
             detail = BEHAVIOR_DETAIL
-        elif key == "hour":
-            rate = self._hour_rate.get(hour, 0.0)
-            title = f"Giao dịch lúc {hour} giờ {part_of_day(hour)}"
-            detail = f"Khung giờ này có tỉ lệ gian lận {vn_pct(rate)}"
-            if direction == "fraud" and rate >= HIGHLIGHT_RATIO * self._overall:
-                detail += f" — gấp {vn_number(rate / self._overall, 1)} lần mức chung"
-            elif direction == "safe":
-                detail += ", thấp hơn hoặc gần mức chung" if rate < HIGHLIGHT_RATIO * self._overall else ""
         else:
             bucket = self._amount_bucket(amount)
             title = f"Số tiền {vn_number(amount, 2)} €"

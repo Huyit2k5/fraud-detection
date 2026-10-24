@@ -217,10 +217,8 @@ HDFS đã lưu trong volume).
   "bất thường" dựa trên việc bị cô lập trong toàn bộ không gian đặc trưng, không nhất thiết trùng
   với các giao dịch gian lận thật (nhiều giao dịch hợp lệ nhưng có giá trị lớn/hiếm cũng bị coi là
   bất thường). Đây là điểm quan trọng cần nêu khi so sánh trong báo cáo.
-- **Đặc trưng giờ trong ngày** (`Hour`, `Hour_sin`, `Hour_cos`) được tạo từ cột `Time` với giả định giao
-  dịch đầu tiên diễn ra lúc 0h; mô hình dùng `Hour_sin`, `Hour_cos` thay cho `Time_scaled` (vì chia tập theo
-  thời gian, mọi giá trị `Time` của tập test đều nằm ngoài khoảng của tập train). Độ chính xác gần như không
-  đổi, nhưng giúp giải thích kết quả bằng ngôn ngữ dễ hiểu ("giao dịch lúc 3 giờ sáng").
+- Mô hình dùng 29 đặc trưng: `Amount_scaled` + V1..V28. Cột `Time` không đưa vào mô hình (vì chia train/test
+  theo thời gian, mọi giá trị `Time` của tập test đều nằm ngoài khoảng của tập train).
 - **Kết quả sau khi tinh chỉnh** (`tune_models.py`): Grid Search chọn Logistic Regression (regParam=0.1,
   elasticNetParam=0.5) và Random Forest (numTrees=50, maxDepth=10, chiến lược class weight, ngưỡng 0,421).
   Random Forest đạt Precision 0,808 / Recall 0,748 / F1 0,777 / PR-AUC 0,795 trên tập test (báo nhầm 19 lần
@@ -243,8 +241,8 @@ Script mở 2 cửa sổ: backend `python -m uvicorn backend.app:app --port 8000
   kỳ để xem giải thích.
 - **Kiểm tra 1 giao dịch**: lấy ngẫu nhiên / một ca gian lận / một ca bình thường, nhãn thật được ẩn cho tới
   khi bấm "Xem kết quả thật".
-- Giải thích bằng lời (SHAP chính xác của Random Forest, gộp thành 3 nhóm: hành vi thẻ, giờ, số tiền), 5 giao
-  dịch giống nhất trong quá khứ, thử thay đổi số tiền/giờ. Có nút chuyển giao diện sáng/tối.
+- Giải thích bằng lời (SHAP chính xác của Random Forest, gộp thành 2 nhóm: hành vi thẻ, số tiền), 5 giao
+  dịch giống nhất trong quá khứ, thử thay đổi số tiền. Có nút chuyển giao diện sáng/tối.
 
 Sau khi chạy lại pipeline, gọi `POST http://localhost:8000/api/reload` (hoặc khởi động lại backend) để nạp mô
 hình mới. Tab ETL và Huấn luyện & Đánh giá đang được xây dựng.

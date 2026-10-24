@@ -1,7 +1,7 @@
 import type { Reason, TransactionExplanation } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 
-const ICONS: Record<Reason["key"], string> = { behavior: "🧬", hour: "🌙", amount: "💶" };
+const ICONS: Record<Reason["key"], string> = { behavior: "🧬", amount: "💶" };
 
 export function ReasonList({ e }: { e: TransactionExplanation }) {
   const max = Math.max(...e.reasons.map((r) => Math.abs(r.contribution)), 1e-9);
@@ -14,7 +14,7 @@ export function ReasonList({ e }: { e: TransactionExplanation }) {
         {e.reasons.map((r) => (
           <li key={r.key} className="grid grid-cols-[32px_1fr_150px] items-center gap-3 rounded-lg bg-panel-2 px-3 py-2.5">
             <span className="text-center text-xl" aria-hidden>
-              {r.key === "hour" && e.hour >= 6 && e.hour < 18 ? "☀️" : ICONS[r.key]}
+              {ICONS[r.key]}
             </span>
             <div>
               <p className="text-[14px] leading-snug">{r.title}</p>

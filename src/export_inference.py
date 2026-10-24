@@ -5,7 +5,7 @@ Backend web suy luận KHÔNG khởi động Spark (quá chậm cho thanh trư�
 trực tiếp), nên mô hình tốt nhất được xuất sang dạng JSON để tính lại bằng numpy:
 - model.json   : mô hình (cây Random Forest hoặc hệ số Logistic Regression), ngưỡng, tham số chuẩn hóa.
 - train.parquet, test.parquet : các cột cần cho suy luận/giải thích (local, kể cả khi DATA_BACKEND=hdfs).
-- rates.json   : tỉ lệ gian lận theo khoảng số tiền và theo giờ (tính trên tập train).
+- rates.json   : tỉ lệ gian lận theo khoảng số tiền (tính trên tập train).
 """
 
 import json
@@ -19,7 +19,6 @@ from pyspark.sql import DataFrame
 
 from config import (
     AMOUNT_COL,
-    HOUR_COL,
     INFERENCE_DIR,
     LABEL_COL,
     MODEL_FEATURE_COLS,
@@ -33,7 +32,7 @@ from config import (
 EXPORTABLE_MODELS = {"Random Forest": "random_forest", "Logistic Regression": "logistic_regression"}
 AMOUNT_EDGES = [0, 1, 10, 50, 100, 500, 1000, None]
 AMOUNT_LABELS = ["<1 €", "1–10 €", "10–50 €", "50–100 €", "100–500 €", "500–1.000 €", ">1.000 €"]
-BUNDLE_COLS = ["tx_id", TIME_COL, HOUR_COL, AMOUNT_COL, LABEL_COL] + MODEL_FEATURE_COLS
+BUNDLE_COLS = ["tx_id", TIME_COL, AMOUNT_COL, LABEL_COL] + MODEL_FEATURE_COLS
 
 
 def export_rf(model: RandomForestClassificationModel) -> list[dict]:
@@ -95,7 +94,7 @@ def choose_model(comparison_df: pd.DataFrame) -> tuple[str, str]:
 
 
 def compute_rates(train_pdf: pd.DataFrame) -> dict:
-    """Tỉ lệ gian lận (0-1) theo khoảng số tiền (lo <= Amount < hi) và theo giờ trong ngày."""
+    """Tỉ lệ gian lận (0-1) theo khoảng số tiền (lo <= Amount < hi)."""
     buckets = []
     for i, label in enumerate(AMOUNT_LABELS):
         lo, hi = AMOUNT_EDGES[i], AMOUNT_EDGES[i + 1]
@@ -105,16 +104,11 @@ def compute_rates(train_pdf: pd.DataFrame) -> dict:
         n, fraud = int(mask.sum()), int(train_pdf.loc[mask, LABEL_COL].sum())
         buckets.append({"label": label, "lo": lo, "hi": hi, "n": n, "fraud": fraud,
                         "rate": fraud / n if n else 0.0})
-    hours = []
-    for h in range(24):
-        mask = train_pdf[HOUR_COL] == h
-        n, fraud = int(mask.sum()), int(train_pdf.loc[mask, LABEL_COL].sum())
-        hours.append({"hour": h, "n": n, "fraud": fraud, "rate": fraud / n if n else 0.0})
-    return {"overall_rate": float(train_pdf[LABEL_COL].mean()), "amount_buckets": buckets, "hours": hours}
+    return {"overall_rate": float(train_pdf[LABEL_COL].mean()), "amount_buckets": buckets}
 
 
 def _to_bundle_pdf(df: DataFrame) -> pd.DataFrame:
-    pdf = df.select([TIME_COL, HOUR_COL, AMOUNT_COL, LABEL_COL] + MODEL_FEATURE_COLS).toPandas()
+    pdf = df.select([TIME_COL, AMOUNT_COL, LABEL_COL] + MODEL_FEATURE_COLS).toPandas()
     pdf = pdf.sort_values(TIME_COL, kind="stable").reset_index(drop=True)
     pdf.insert(0, "tx_id", np.arange(len(pdf)))
     return pdf[BUNDLE_COLS]

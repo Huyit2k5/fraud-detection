@@ -25,7 +25,6 @@ DEFAULT_SPEED = 100
 class WhatIfRequest(BaseModel):
     tx_id: int
     amount: float = Field(ge=0)
-    hour: int = Field(ge=0, le=23)
 
 
 def _hdfs_ok() -> bool:
@@ -93,7 +92,7 @@ def create_app(bundle_dir: Path = INFERENCE_DIR) -> FastAPI:
     @app.post("/api/infer/what-if")
     def what_if(req: WhatIfRequest):
         try:
-            return service().what_if(req.tx_id, req.amount, req.hour)
+            return service().what_if(req.tx_id, req.amount)
         except KeyError:
             raise HTTPException(status_code=404, detail="Không tìm thấy giao dịch")
 

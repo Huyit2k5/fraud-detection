@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { postWhatIf, type TransactionExplanation } from "@/lib/api";
-import { fmtMoney, partOfDay } from "@/lib/format";
+import { fmtMoney } from "@/lib/format";
 
 const DEBOUNCE_MS = 150;
 const SLIDER_MAX = 2000;
@@ -19,10 +19,9 @@ function verdictChange(before: boolean, after: boolean) {
 
 export function WhatIf({ base, onResult }: Props) {
   const [amount, setAmount] = useState(base.amount);
-  const [hour, setHour] = useState(base.hour);
   const [result, setResult] = useState<TransactionExplanation | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const changed = amount !== base.amount || hour !== base.hour;
+  const changed = amount !== base.amount;
 
   useEffect(() => {
     if (!changed) {
@@ -30,18 +29,18 @@ export function WhatIf({ base, onResult }: Props) {
       return;
     }
     const id = setTimeout(() => {
-      postWhatIf({ tx_id: base.tx_id, amount, hour })
+      postWhatIf({ tx_id: base.tx_id, amount })
         .then((r) => (setResult(r), setError(null), onResult(r)))
         .catch((e: Error) => setError(e.message));
     }, DEBOUNCE_MS);
     return () => clearTimeout(id);
-  }, [amount, hour, changed, base.tx_id, onResult]);
+  }, [amount, changed, base.tx_id, onResult]);
 
   const change = result ? verdictChange(base.alert, result.alert) : null;
   return (
     <section className="rounded-xl border border-line bg-panel p-4">
-      <h2 className="mb-1 text-sm font-semibold text-muted">Thử thay đổi giao dịch</h2>
-      <p className="text-xs text-muted">Nếu giao dịch này khác đi một chút thì sao?</p>
+      <h2 className="mb-1 text-sm font-semibold text-muted">Thử thay đổi số tiền</h2>
+      <p className="text-xs text-muted">Nếu giao dịch này có số tiền khác đi thì sao?</p>
       <label className="mt-3 block text-[13px]">
         <span className="flex justify-between">
           <span>Số tiền</span>
@@ -54,21 +53,6 @@ export function WhatIf({ base, onResult }: Props) {
           step={1}
           value={amount}
           onChange={(ev) => setAmount(Number(ev.target.value))}
-          className="w-full accent-action"
-        />
-      </label>
-      <label className="mt-2 block text-[13px]">
-        <span className="flex justify-between">
-          <span>Giờ giao dịch</span>
-          <b>{hour} giờ {partOfDay(hour)}</b>
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={23}
-          step={1}
-          value={hour}
-          onChange={(ev) => setHour(Number(ev.target.value))}
           className="w-full accent-action"
         />
       </label>

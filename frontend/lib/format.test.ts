@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fmtClock, fmtInt, fmtMoney, fmtPct, partOfDay } from "./format";
+import { fmtClock, fmtInt, fmtMoney, fmtPct } from "./format";
 
 describe("định dạng kiểu Việt Nam", () => {
   it("số tiền có 2 chữ số thập phân và dấu €", () => {
@@ -20,14 +20,5 @@ describe("định dạng kiểu Việt Nam", () => {
 
   it("thời điểm theo ngày và giờ:phút", () => {
     expect(fmtClock(2, 3, 2)).toBe("ngày 2, 03:02");
-  });
-
-  it("buổi trong ngày cùng mốc với backend", () => {
-    expect(partOfDay(3)).toBe("sáng");
-    expect(partOfDay(10)).toBe("sáng");
-    expect(partOfDay(11)).toBe("chiều");
-    expect(partOfDay(17)).toBe("chiều");
-    expect(partOfDay(18)).toBe("tối");
-    expect(partOfDay(23)).toBe("tối");
   });
 });

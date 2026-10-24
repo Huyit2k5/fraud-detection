@@ -54,7 +54,7 @@ export function ExplanationPanel({ e }: { e: TransactionExplanation }) {
       </section>
 
       {whatIf && (
-        <p className="text-xs text-action">Đang hiển thị lý do cho giao dịch sau khi thay đổi số tiền/giờ.</p>
+        <p className="text-xs text-action">Đang hiển thị lý do cho giao dịch sau khi thay đổi số tiền.</p>
       )}
       <ReasonList e={shown} />
 

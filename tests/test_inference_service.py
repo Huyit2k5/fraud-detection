@@ -21,9 +21,9 @@ def test_explain_reasons_sum(service):
     for tx_id in range(0, 50, 7):
         e = service.explain_tx(tx_id)
         assert e["base_value"] + sum(r["contribution"] for r in e["reasons"]) == pytest.approx(_model_score(e))
-        assert len(e["reasons"]) == 3
-        assert {r["key"] for r in e["reasons"]} == {"behavior", "hour", "amount"}
-        assert len(e["technical"]) == 31
+        assert len(e["reasons"]) == 2
+        assert {r["key"] for r in e["reasons"]} == {"behavior", "amount"}
+        assert len(e["technical"]) == 29
         assert e["risk"] == round(e["probability"] * 100)
         assert e["alert"] == (e["probability"] >= e["threshold"])
         assert e["what_if"] is False
@@ -46,10 +46,9 @@ def test_reason_direction_and_copy(service):
     assert seen_safe
 
 
-def test_hour_and_amount_copy(service):
+def test_amount_and_behavior_copy(service):
     e = service.explain_tx(0)
     by_key = {r["key"]: r for r in e["reasons"]}
-    assert by_key["hour"]["title"].startswith(f"Giao dịch lúc {e['hour']} giờ ")
     assert by_key["amount"]["title"].startswith("Số tiền ") and by_key["amount"]["title"].endswith(" €")
     assert "%" in by_key["amount"]["detail"]
     assert "28 dấu hiệu" in by_key["behavior"]["detail"]
@@ -73,15 +72,14 @@ def test_neighbors(service):
 
 
 def test_what_if_edges(service):
-    for amount, hour in [(0, 0), (25691.16, 23)]:
-        e = service.what_if(4, amount, hour)
+    for amount in (0, 25691.16):
+        e = service.what_if(4, amount)
         assert 0 <= e["risk"] <= 100
         assert e["what_if"] is True
-        assert e["amount"] == amount and e["hour"] == hour
+        assert e["amount"] == amount
 
-    tech = lambda e: {t["feature"]: t["value"] for t in e["technical"]}  # noqa: E731
-    assert tech(service.what_if(4, 50, 14))["Hour_sin"] != pytest.approx(tech(service.what_if(4, 50, 2))["Hour_sin"])
-    assert tech(service.what_if(4, 50, 2))["Amount_scaled"] == pytest.approx((50 - 88.0) / 250.0)
+    tech = {t["feature"]: t["value"] for t in service.what_if(4, 50)["technical"]}
+    assert tech["Amount_scaled"] == pytest.approx((50 - 88.0) / 250.0)
 
 
 def test_explain_unknown_tx(service):

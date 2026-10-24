@@ -20,10 +20,3 @@ export const fmtClock = (day: number, hour: number, minute: number) =>
   `ngày ${day}, ${pad2(hour)}:${pad2(minute)}`;
 
 export const fmtTime = (hour: number, minute: number) => `${pad2(hour)}:${pad2(minute)}`;
-
-/** Cùng mốc với backend (backend/inference.py): 0–10h sáng, 11–17h chiều, 18–23h tối. */
-export function partOfDay(hour: number): "sáng" | "chiều" | "tối" {
-  if (hour <= 10) return "sáng";
-  if (hour <= 17) return "chiều";
-  return "tối";
-}

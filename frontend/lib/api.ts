@@ -12,7 +12,7 @@ export type Status = {
 };
 
 export type Reason = {
-  key: "behavior" | "hour" | "amount";
+  key: "behavior" | "amount";
   contribution: number;
   direction: "fraud" | "safe";
   title: string;
@@ -94,7 +94,7 @@ export const getStatus = () => request<Status>("/api/status");
 export const reloadModel = () => request<Status>("/api/reload", { method: "POST" });
 export const getSample = (kind: SampleKind) => request<TransactionExplanation>(`/api/infer/sample?kind=${kind}`);
 export const getTx = (id: number) => request<TransactionExplanation>(`/api/infer/tx/${id}`);
-export const postWhatIf = (body: { tx_id: number; amount: number; hour: number }) =>
+export const postWhatIf = (body: { tx_id: number; amount: number }) =>
   request<TransactionExplanation>("/api/infer/what-if", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

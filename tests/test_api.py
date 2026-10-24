@@ -40,11 +40,10 @@ def test_sample_and_tx(client):
 
 
 def test_what_if_validation(client):
-    assert client.post("/api/infer/what-if", json={"tx_id": 0, "amount": -1, "hour": 3}).status_code == 422
-    assert client.post("/api/infer/what-if", json={"tx_id": 0, "amount": 10, "hour": 24}).status_code == 422
-    r = client.post("/api/infer/what-if", json={"tx_id": 0, "amount": 0, "hour": 0})
+    assert client.post("/api/infer/what-if", json={"tx_id": 0, "amount": -1}).status_code == 422
+    r = client.post("/api/infer/what-if", json={"tx_id": 0, "amount": 0})
     assert r.status_code == 200 and r.json()["what_if"] is True
-    assert client.post("/api/infer/what-if", json={"tx_id": 999999, "amount": 0, "hour": 0}).status_code == 404
+    assert client.post("/api/infer/what-if", json={"tx_id": 999999, "amount": 0}).status_code == 404
 
 
 def test_stream(client, fake_bundle_dir):
