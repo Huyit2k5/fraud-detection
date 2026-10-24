@@ -28,8 +28,8 @@ def _tree(v_ll, v_lr, v_rl, v_rr, w=(40.0, 10.0, 30.0, 120.0)):
 TREES = [_tree(0.6, 0.95, 0.01, 0.3), _tree(0.7, 0.9, 0.02, 0.2), _tree(0.5, 0.99, 0.0, 0.4)]
 
 
-def _frame(n: int, t0: float, rng) -> pd.DataFrame:
-    time = np.sort(rng.uniform(t0, t0 + 40_000, n))
+def _frame(n: int, t0: float, rng, span: float) -> pd.DataFrame:
+    time = np.sort(rng.uniform(t0, t0 + span, n))
     hour_frac = (time % 86_400) / 3600
     amount = np.round(rng.exponential(80, n), 2)
     df = pd.DataFrame(rng.normal(size=(n, len(MODEL_FEATURE_COLS))), columns=MODEL_FEATURE_COLS)
@@ -48,8 +48,9 @@ def write_fake_bundle(path: Path) -> Path:
     from export_inference import compute_rates
 
     rng = np.random.default_rng(7)
-    train = _frame(200, 0, rng)
-    test = _frame(50, 100_000, rng)
+    train = _frame(200, 0, rng, span=40_000)
+    # Tập test ngắn (4.000 giây) để test phát lại luồng ở tốc độ ×1000 chạy nhanh (~4 giây).
+    test = _frame(50, 100_000, rng, span=4_000)
     path.mkdir(parents=True, exist_ok=True)
     meta = {
         "model_name": "Random Forest", "model_type": "random_forest", "features": MODEL_FEATURE_COLS,
