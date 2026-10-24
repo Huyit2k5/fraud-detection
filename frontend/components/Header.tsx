@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import { getStatus, type Status } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 
+import { ThemeToggle } from "./ThemeToggle";
+
 const TABS = [
   { href: "/etl", label: "① ETL" },
   { href: "/train", label: "② Huấn luyện & Đánh giá" },
@@ -74,6 +76,7 @@ export function Header() {
             )}
           </>
         )}
+        <ThemeToggle />
       </div>
     </header>
   );

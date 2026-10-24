@@ -1,3 +1,5 @@
+import { InferView } from "@/components/infer/InferView";
+
 export default function InferPage() {
-  return <p className="text-muted">Đang xây dựng tab Suy luận…</p>;
+  return <InferView />;
 }

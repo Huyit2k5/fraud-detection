@@ -63,7 +63,7 @@ export type StreamStats = {
 };
 
 export type StreamMessage =
-  | { type: "batch"; txs: StreamTx[]; stats: StreamStats; clock: number; speed: number; paused: boolean }
+  | { type: "batch"; txs: StreamTx[]; stats: StreamStats; clock: number; speed: number; paused: boolean; step: boolean }
   | { type: "end"; stats: StreamStats }
   | { type: "error"; detail: string };
 

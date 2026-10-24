@@ -123,11 +123,12 @@ def create_app(bundle_dir: Path = INFERENCE_DIR) -> FastAPI:
 
         reader_task = asyncio.create_task(reader())
         t0, t1 = svc.test_time_range()
-        clock, speed, paused = t0, DEFAULT_SPEED, False
+        clock, pos, speed, paused = t0, 0, DEFAULT_SPEED, False
         stats = {"checked": 0, "caught": 0, "false_alarms": 0, "missed": 0, "blocked_amount": 0.0}
         try:
             while not disconnected.is_set():
                 await asyncio.sleep(STREAM_TICK_SECONDS)
+                step = False
                 while not commands.empty():
                     cmd = commands.get_nowait()
                     if not isinstance(cmd, dict):
@@ -136,29 +137,39 @@ def create_app(bundle_dir: Path = INFERENCE_DIR) -> FastAPI:
                         paused = True
                     elif cmd.get("cmd") == "resume":
                         paused = False
+                    elif cmd.get("cmd") == "step":
+                        # Chế độ từng giao dịch: dừng luồng và đi thêm đúng 1 giao dịch.
+                        paused, step = True, True
                     elif cmd.get("cmd") == "speed" and cmd.get("value") in STREAM_SPEEDS:
                         speed = cmd["value"]
                     elif cmd.get("cmd") == "restart":
-                        clock = t0
+                        clock, pos = t0, 0
                         stats = dict.fromkeys(stats, 0)
                         stats["blocked_amount"] = 0.0
                 txs = []
-                if not paused:
+                if step and pos < len(svc):
+                    txs = svc.stream_slice(pos, pos + 1)
+                    pos += 1
+                    clock = svc.time_at(pos - 1)
+                elif not paused:
+                    # Vị trí `pos` (không chỉ đồng hồ) để không phát lặp/bỏ sót giao dịch trùng thời điểm
+                    # khi xen kẽ chế độ từng giao dịch và chế độ chạy liên tục.
                     end = clock + STREAM_TICK_SECONDS * speed
-                    txs = svc.stream_batch(clock, end)
-                    clock = end
-                    for tx in txs:
-                        stats["checked"] += 1
-                        if tx["alert"] and tx["true_label"] == 1:
-                            stats["caught"] += 1
-                            stats["blocked_amount"] += tx["amount"]
-                        elif tx["alert"]:
-                            stats["false_alarms"] += 1
-                        elif tx["true_label"] == 1:
-                            stats["missed"] += 1
+                    hi = max(pos, svc.index_at(end))
+                    txs = svc.stream_slice(pos, hi)
+                    pos, clock = hi, end
+                for tx in txs:
+                    stats["checked"] += 1
+                    if tx["alert"] and tx["true_label"] == 1:
+                        stats["caught"] += 1
+                        stats["blocked_amount"] += tx["amount"]
+                    elif tx["alert"]:
+                        stats["false_alarms"] += 1
+                    elif tx["true_label"] == 1:
+                        stats["missed"] += 1
                 await ws.send_json({"type": "batch", "txs": txs, "stats": stats, "clock": clock,
-                                    "speed": speed, "paused": paused})
-                if clock > t1:
+                                    "speed": speed, "paused": paused, "step": step})
+                if pos >= len(svc) and clock >= t1:
                     await ws.send_json({"type": "end", "stats": stats})
                     await ws.close()
                     break

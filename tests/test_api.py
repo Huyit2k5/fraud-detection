@@ -77,6 +77,29 @@ def test_stream_pause_and_bad_command(client):
         assert ws.receive_json()["speed"] == 100
 
 
+def test_stream_step_one_transaction(client, fake_bundle_dir):
+    import pandas as pd
+
+    test = pd.read_parquet(fake_bundle_dir / "test.parquet")
+    with client.websocket_connect("/api/infer/stream") as ws:
+        ws.send_json({"cmd": "pause"})
+        ws.send_json({"cmd": "step"})
+        stepped = []
+        for _ in range(10):
+            msg = ws.receive_json()
+            if msg["txs"]:
+                stepped.append(msg)
+                if len(stepped) == 1:
+                    ws.send_json({"cmd": "step"})
+                else:
+                    break
+    first, second = stepped
+    assert len(first["txs"]) == 1 and len(second["txs"]) == 1
+    assert first["paused"] is True and first["step"] is True
+    assert [first["txs"][0]["tx_id"], second["txs"][0]["tx_id"]] == test["tx_id"].tolist()[:2]
+    assert second["stats"]["checked"] == 2
+
+
 def test_stream_reconnect(client):
     with client.websocket_connect("/api/infer/stream") as ws:
         ws.send_json({"cmd": "speed", "value": 1000})

@@ -146,6 +146,20 @@ class InferenceService:
     # ------------------------------------------------------------------ phát lại luồng
     def stream_batch(self, start_time: float, end_time: float) -> list[dict]:
         lo, hi = np.searchsorted(self._times, [start_time, end_time], side="left")
+        return self.stream_slice(int(lo), int(hi))
+
+    def index_at(self, time_s: float) -> int:
+        """Vị trí (theo thứ tự thời gian) của giao dịch đầu tiên có Time >= time_s."""
+        return int(np.searchsorted(self._times, time_s, side="left"))
+
+    def time_at(self, index: int) -> float:
+        return float(self._times[index])
+
+    def __len__(self) -> int:
+        return len(self._times)
+
+    def stream_slice(self, lo: int, hi: int) -> list[dict]:
+        """Các giao dịch test từ vị trí lo đến trước hi (theo thứ tự thời gian)."""
         rows = self.test.iloc[lo:hi]
         out = []
         for tx_id, t, amount, label in zip(rows["tx_id"], rows[TIME_COL], rows[AMOUNT_COL], rows[LABEL_COL]):
