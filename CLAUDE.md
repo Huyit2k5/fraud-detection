@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Credit-card fraud detection (Kaggle ULB `creditcard.csv`: `Time`, `V1`–`V28` PCA, `Amount`, `Class`) built as a Big Data course project: PySpark ETL + Spark MLlib / scikit-learn models, optional real HDFS via Docker, a Streamlit dashboard, and an auto-generated Word report. Code comments, docs, and console output are in Vietnamese — keep new text consistent with that. The phase plan the code follows ("Giai đoạn 1–7") is in [ke-hoach-phat-hien-giao-dich-bat-thuong.md](ke-hoach-phat-hien-giao-dich-bat-thuong.md).
 
-There is no test suite or linter configured.
+Tests: `pytest` for the pipeline/backend (`tests/`, uses a hand-built fake inference bundle, Spark tests need JDK 17) and `vitest` for the frontend.
 
 ## Commands
 
@@ -18,8 +18,11 @@ python src/generate_synthetic_data.py   # writes data/raw/creditcard.csv if the 
 python run_pipeline.py                  # ETL → imbalance → train → evaluate → visualize
 python src/<step>.py                    # run one stage alone (spark_etl, imbalance, train_models, evaluate, visualize)
 python src/tune_models.py               # optional: grid search + CV, weighted vs SMOTE, threshold tuning
-python reports/generate_report.py       # rebuild reports/final_report.docx from latest metrics/figures
-streamlit run dashboard/app.py
+python reports/make_figures.py          # matplotlib figures + Spark stats for the report (needs models)
+python reports/generate_report.py       # rebuild reports/final_report.docx (Word COM updates TOC on Windows)
+python -m pytest -q                     # all Python tests; single test: python -m pytest tests/test_api.py::test_stream -q
+powershell -File start_ui.ps1           # web UI: uvicorn backend.app:app --port 8000 + pnpm dev in frontend/
+pnpm --dir frontend test | lint | build
 
 # Optional real HDFS pseudo-cluster
 docker compose -f docker-compose.hdfs.yml up -d
@@ -41,10 +44,15 @@ DATA_BACKEND=hdfs python run_pipeline.py
 - **All Spark work uses `spark_etl.get_spark_session()`** (local[*], HDFS config applied when needed). Each stage's `run_*()` creates a session and stops it in `finally`.
 - **Data flow** (Parquet between stages): raw CSV → `cleaned` → time-based split (`TRAIN_RATIO=0.7` on `Time`, not random) → `train`/`test` → `imbalance.py` adds `class_weight` column (`train_weighted`, used for MLlib `weightCol`) and a SMOTE-oversampled variant (`train_balanced`, used only by tuning).
 - **Two feature lists:** `FEATURE_COLS` (raw `Time`/`Amount`, for EDA/plots) vs `MODEL_FEATURE_COLS` (`Time_scaled`/`Amount_scaled` + V1–V28, for training). Use the latter for any model.
+- **Features:** `MODEL_FEATURE_COLS = [Hour_sin, Hour_cos, Amount_scaled, V1..V28]`. `Hour*` are derived from `Time` in `spark_etl.add_hour_features` (assumes the first transaction is at 0h). `Time_scaled` is still computed but deliberately NOT a model feature (time-based split puts all test `Time` values outside the train range).
 - **Three models:** Logistic Regression and Random Forest (Spark MLlib, saved as Spark model dirs) and Isolation Forest (sklearn, trained on a pandas sample pulled from Spark, saved as `isolation_forest.joblib`; unsupervised, labels used only for evaluation).
+- **Tuning:** class-weight vs SMOTE and the decision threshold are chosen on a time-based validation split (last 15% of train) using the model of the chosen strategy — never mix a threshold from one strategy with a model of the other.
 - **Tuning → evaluation coupling:** `tune_models.py` overwrites `models/logistic_regression` and `models/random_forest` and writes `models/thresholds.json`. `evaluate.py` uses those thresholds if the file exists (else 0.5). After tuning, rerun `evaluate.py` and `visualize.py`, then `generate_report.py`.
 - **Outputs:** `reports/metrics_comparison.csv` and `reports/figures/*.png` feed both the dashboard and `generate_report.py`. Data, models, figures, and the CSV are gitignored.
 - **HDFS access outside Spark** goes through `src/hdfs_utils.py` (a thin WebHDFS REST wrapper using `requests`, writes as `user.name=root`). `run_pipeline.py` uses it to check the raw file exists on HDFS before starting Spark.
+- **Inference bundle / web backend:** `evaluate.py` calls `export_inference.export_inference_bundle`, writing `models/inference/` (best exportable model by PR-AUC as JSON trees/coefficients, train/test parquet, fraud rates). `backend/` (FastAPI) loads it once and scores/explains with numpy + `shap` — it must never start Spark. Exported RF probabilities match Spark to ~1e-17; keep `tests/test_export_inference.py` parity tests green when touching export. WS `/api/infer/stream` replays the test set (commands pause/resume/speed/step/restart).
+- **Frontend:** Next.js 16 (cacheComponents on; read `frontend/node_modules/next/dist/docs/` before using Next APIs, see `frontend/AGENTS.md`). Colors are CSS variables with light/dark sets in `app/globals.css` — use the semantic Tailwind tokens (`bg-panel`, `text-risk-ink`, …), not raw palette colors. UI copy is Vietnamese; V1–V28/SHAP terms only inside "🔧 Chi tiết kỹ thuật".
+- **Report:** `reports/build_template.py` turns the faculty's sample .docx into `reports/template/report_template.docx` (format only); `generate_report.py` fills it from `reports/report_stats.json` + CSV/JSON results. All figures must be matplotlib from real data (no generated images); screenshots live in `reports/assets/`.
 - Notebooks in `notebooks/` call `src/` functions rather than reimplementing logic; each sets `JAVA_HOME`/`HADOOP_HOME` in its first cell.
 
 ## Evaluation conventions

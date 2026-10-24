@@ -18,14 +18,21 @@ fraud-detection/
 │   ├── spark_etl.py       # Giai đoạn 1-2: đọc HDFS/CSV bằng Spark, EDA, làm sạch, chuẩn hóa
 │   ├── imbalance.py       # Giai đoạn 3: xử lý mất cân bằng (class weight / SMOTE)
 │   ├── train_models.py    # Giai đoạn 4: huấn luyện Logistic Regression, Random Forest (Spark MLlib) + Isolation Forest (sklearn)
-│   ├── evaluate.py         # Giai đoạn 5: Precision/Recall/F1/ROC-AUC/PR-AUC, so sánh 3 mô hình
+│   ├── evaluate.py         # Giai đoạn 5: Precision/Recall/F1/ROC-AUC/PR-AUC, so sánh 3 mô hình + xuất gói suy luận
+│   ├── export_inference.py # xuất mô hình tốt nhất dạng JSON + dữ liệu cho giao diện web (models/inference/)
 │   └── visualize.py        # Giai đoạn 6: biểu đồ trực quan
+├── backend/                # FastAPI: suy luận + giải thích (SHAP) không cần Spark, WebSocket giám sát trực tiếp
+├── frontend/               # Next.js: giao diện web (tab ETL, Huấn luyện & Đánh giá, Suy luận)
+├── tests/                  # pytest
 ├── reports/
 │   ├── figures/            # biểu đồ xuất ra
 │   ├── metrics_comparison.csv
+│   ├── build_template.py   # dựng khung báo cáo từ file Word mẫu của khoa
+│   ├── make_figures.py     # sinh toàn bộ hình (matplotlib) + số liệu cho báo cáo từ dữ liệu thật
 │   ├── generate_report.py  # Giai đoạn 7: sinh báo cáo học thuật (Word)
 │   └── final_report.docx   # báo cáo học thuật hoàn chỉnh (sinh ra bởi generate_report.py)
 ├── run_pipeline.py         # script điều phối chạy toàn bộ pipeline
+├── start_ui.ps1            # khởi động giao diện web (backend + frontend)
 ├── requirements.txt
 └── README.md
 ```
@@ -125,6 +132,9 @@ Script này sẽ:
 
 Sau đó chạy lại `python src/evaluate.py` và `python src/visualize.py` để cập nhật kết quả/biểu đồ
 với mô hình đã tinh chỉnh (evaluate.py tự động dùng ngưỡng trong `models/thresholds.json` nếu có).
+Chiến lược xử lý mất cân bằng (class weight / SMOTE) và ngưỡng được chọn trên **tập validation tách theo
+thời gian** (15% cuối của tập train), bằng chính mô hình của chiến lược đã chọn; kết quả lưới tham số lưu ở
+`models/tuning_results.json`.
 
 ## 5. Sinh báo cáo học thuật (Giai đoạn 7)
 
@@ -132,14 +142,17 @@ Sau khi đã có `reports/metrics_comparison.csv` và `reports/figures/*.png` (c
 khuyến nghị chạy thêm `tune_models.py` trước), sinh báo cáo Word hoàn chỉnh bằng:
 
 ```bash
-python reports/generate_report.py
+python reports/make_figures.py      # hình matplotlib + số liệu thống kê (Spark) từ dữ liệu thật
+python reports/generate_report.py   # ghi reports/final_report.docx
 ```
 
-Script tự động đọc số liệu/biểu đồ MỚI NHẤT và ghi ra `reports/final_report.docx`, gồm đầy đủ:
-giới thiệu, cơ sở lý thuyết (Big Data/Spark, 3 thuật toán, các chỉ số đánh giá), kiến trúc hệ
-thống, kết quả thực nghiệm (bảng + biểu đồ + phân tích), kết luận & hướng phát triển, tài liệu
-tham khảo. Chạy lại script này bất cứ khi nào số liệu thay đổi (ví dụ sau khi tinh chỉnh mô hình
-lại) để cập nhật báo cáo.
+Báo cáo theo đúng định dạng file Word mẫu của khoa (khung ở `reports/template/report_template.docx`,
+dựng lại bằng `python reports/build_template.py <file mẫu>.docx` khi đổi thông tin trang bìa/thành viên)
+và cấu trúc yêu cầu của học phần: trang bìa, bảng phân công, mục lục, danh mục hình/bảng, Chương 1 Giới
+thiệu đề tài (bộ dữ liệu, đặc trưng, 5V), Chương 2 Cơ sở lý thuyết, Chương 3 Xây dựng ứng dụng & trực
+quan hóa, Kết luận, Tài liệu tham khảo. Trên Windows có cài Word, mục lục và số trang được cập nhật tự
+động (`reports/update_fields.ps1`); nếu không, mở file rồi nhấn Ctrl+A, F9. Nếu `final_report.docx` đang
+mở trong Word, ghi ra file khác: `python reports/generate_report.py reports/ban_nhap.docx`.
 
 ## 6. HDFS pseudo-cluster (tùy chọn) + Web dashboard
 
@@ -175,11 +188,7 @@ chỉ mô phỏng, làm theo các bước sau (cần Docker Desktop đang chạy
    `/data/processed/` trên HDFS thay vì `data/processed/` local. Bỏ biến `DATA_BACKEND` (hoặc set về
    `local`) để quay lại chế độ cũ.
 
-5. Xem web dashboard trực quan hóa toàn bộ pipeline (dữ liệu trên HDFS, log ETL, so sánh mô hình,
-   biểu đồ):
-   ```bash
-   streamlit run dashboard/app.py
-   ```
+5. Xem giao diện web (mục 8) hoặc dashboard Streamlit cũ: `streamlit run dashboard/app.py`.
 
 Dừng cluster: `docker compose -f docker-compose.hdfs.yml down` (thêm `-v` nếu muốn xóa luôn dữ liệu
 HDFS đã lưu trong volume).
@@ -208,8 +217,36 @@ HDFS đã lưu trong volume).
   "bất thường" dựa trên việc bị cô lập trong toàn bộ không gian đặc trưng, không nhất thiết trùng
   với các giao dịch gian lận thật (nhiều giao dịch hợp lệ nhưng có giá trị lớn/hiếm cũng bị coi là
   bất thường). Đây là điểm quan trọng cần nêu khi so sánh trong báo cáo.
-- **Kết quả sau khi tinh chỉnh** (`tune_models.py`, xem mục 4): Grid Search chọn
-  Logistic Regression (regParam=0.1, elasticNetParam=0.5), Random Forest (numTrees=50, maxDepth=10);
-  cả 2 đều giữ chiến lược class-weight (tốt hơn SMOTE một chút trên PR-AUC nội bộ); ngưỡng phân loại
-  tối ưu: LR=0.759, RF=0.559 (thay vì mặc định 0.5) → Precision của Logistic Regression tăng từ
-  0.11 lên 0.80, Random Forest đạt Precision 0.95/Recall 0.70/F1 0.81 trên tập test.
+- **Đặc trưng giờ trong ngày** (`Hour`, `Hour_sin`, `Hour_cos`) được tạo từ cột `Time` với giả định giao
+  dịch đầu tiên diễn ra lúc 0h; mô hình dùng `Hour_sin`, `Hour_cos` thay cho `Time_scaled` (vì chia tập theo
+  thời gian, mọi giá trị `Time` của tập test đều nằm ngoài khoảng của tập train). Độ chính xác gần như không
+  đổi, nhưng giúp giải thích kết quả bằng ngôn ngữ dễ hiểu ("giao dịch lúc 3 giờ sáng").
+- **Kết quả sau khi tinh chỉnh** (`tune_models.py`): Grid Search chọn Logistic Regression (regParam=0.1,
+  elasticNetParam=0.5) và Random Forest (numTrees=50, maxDepth=10, chiến lược class weight, ngưỡng 0,421).
+  Random Forest đạt Precision 0,808 / Recall 0,748 / F1 0,777 / PR-AUC 0,795 trên tập test (báo nhầm 19 lần
+  trên 85.217 giao dịch bình thường) và được dùng cho tab Suy luận.
+
+## 8. Giao diện web (FastAPI + Next.js)
+
+Yêu cầu thêm: Node.js 20+ và pnpm. Cần chạy pipeline + `tune_models.py` + `evaluate.py` trước để có gói
+suy luận `models/inference/` (evaluate.py tự xuất).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File start_ui.ps1
+```
+
+Script mở 2 cửa sổ: backend `python -m uvicorn backend.app:app --port 8000` và frontend `pnpm dev` (trong
+`frontend/`), rồi mở http://localhost:3000/infer. Tab **Suy luận** gồm:
+
+- **Giám sát trực tiếp**: phát lại giao dịch của tập test theo thứ tự thời gian (×10/×100/×1000 hoặc **từng
+  giao dịch**), bộ đếm bắt đúng/báo nhầm/bỏ sót, lọc **chỉ giao dịch nghi gian lận**; bấm vào giao dịch bất
+  kỳ để xem giải thích.
+- **Kiểm tra 1 giao dịch**: lấy ngẫu nhiên / một ca gian lận / một ca bình thường, nhãn thật được ẩn cho tới
+  khi bấm "Xem kết quả thật".
+- Giải thích bằng lời (SHAP chính xác của Random Forest, gộp thành 3 nhóm: hành vi thẻ, giờ, số tiền), 5 giao
+  dịch giống nhất trong quá khứ, thử thay đổi số tiền/giờ. Có nút chuyển giao diện sáng/tối.
+
+Sau khi chạy lại pipeline, gọi `POST http://localhost:8000/api/reload` (hoặc khởi động lại backend) để nạp mô
+hình mới. Tab ETL và Huấn luyện & Đánh giá đang được xây dựng.
+
+Kiểm thử: `.venv\Scripts\python -m pytest -q` (backend + pipeline) và `pnpm --dir frontend test`.
