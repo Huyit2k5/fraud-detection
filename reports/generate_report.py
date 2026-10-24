@@ -74,10 +74,11 @@ class Report:
         self.first_chapter = False
 
     def h2(self, text):
-        self.doc.add_paragraph(text, style="h2")
+        # Tiêu đề luôn đi cùng đoạn ngay sau nó (không bị bỏ lại một mình cuối trang).
+        self.doc.add_paragraph(text, style="h2").paragraph_format.keep_with_next = True
 
     def h3(self, text):
-        self.doc.add_paragraph(text, style="h3")
+        self.doc.add_paragraph(text, style="h3").paragraph_format.keep_with_next = True
 
     def unnumbered(self, text: str):
         """Tiêu đề không đánh số (KẾT LUẬN, TÀI LIỆU THAM KHẢO) - có trong mục lục."""
@@ -885,19 +886,53 @@ def chapter3(R: Report, d: dict):
 
     # ---- 3.11 Ứng dụng
     R.h2("Ứng dụng minh họa")
-    R.para("Ứng dụng web minh họa gồm backend **FastAPI** và frontend **Next.js**, được thiết kế cho người dùng "
-           "không chuyên (nhân viên ngân hàng, khách hàng):")
+    R.para("Ứng dụng web minh họa gồm backend **FastAPI** (Python) và frontend **Next.js** (TypeScript), được "
+           "thiết kế cho người dùng không chuyên như nhân viên ngân hàng: mọi kết luận đều đi kèm lý do viết bằng "
+           "lời, các thuật ngữ kỹ thuật (V1–V28, SHAP) chỉ xuất hiện trong mục “Chi tiết kỹ thuật”.")
+    R.h3("Kiến trúc ứng dụng")
+    n_trees = s["rf_params"]["numTrees"]
     R.bullets([
-        "**Tab ETL:** theo dõi quá trình Spark xử lý dữ liệu (các bước, job/stage/task chạy song song) và các "
-        "biểu đồ khảo sát dữ liệu, kèm nhật ký sự kiện viết bằng câu dễ hiểu.",
-        "**Tab Huấn luyện & Đánh giá:** chạy từng bước xử lý mất cân bằng, huấn luyện, tinh chỉnh, đánh giá và "
-        "xem bảng so sánh, ma trận nhầm lẫn.",
-        "**Tab Suy luận:** mô phỏng giám sát trực tiếp – phát lại giao dịch của tập test theo thứ tự thời gian; "
-        "mô hình tốt nhất chấm điểm rủi ro 0–100 cho từng giao dịch, cảnh báo giao dịch nghi vấn và **giải "
-        "thích lý do** bằng SHAP được gộp thành ba nhóm dễ hiểu: hành vi thẻ, giờ giao dịch, số tiền; kèm các "
-        "giao dịch tương tự trong quá khứ và chức năng thử thay đổi số tiền/giờ.",
+        f"Ở cuối bước đánh giá, mô hình tốt nhất (Random Forest, {n_trees} cây) được **xuất sang dạng JSON** cùng "
+        "dữ liệu train/test và tỉ lệ gian lận theo khoảng tiền, theo giờ (gói suy luận models/inference/).",
+        "Backend nạp gói này một lần và chấm điểm bằng NumPy, **không cần khởi động Spark** cho mỗi yêu cầu. Xác "
+        "suất tính lại được kiểm tra tự động trùng với Spark (sai số dưới 10⁻¹⁶); toàn bộ "
+        f"{vn(s['test_rows'])} giao dịch của tập test được chấm trong chưa đến 1 giây.",
+        "Giải thích dùng thuật toán TreeSHAP trên chính các cây của mô hình; đóng góp của V1–V28 được cộng gộp "
+        "thành lý do “hành vi thẻ”, của Hour_sin + Hour_cos thành “giờ giao dịch”, của Amount_scaled thành “số "
+        "tiền”. Năm giao dịch tương tự được tìm bằng thuật toán láng giềng gần nhất trên tập train.",
+        "Chế độ giám sát trực tiếp dùng WebSocket: backend phát lại các giao dịch của tập test theo đúng thứ tự "
+        "thời gian, frontend hiển thị và cập nhật bộ đếm theo thời gian thực.",
     ])
-    R.para("__(Ảnh chụp màn hình giao diện ứng dụng được bổ sung khi hoàn thiện ứng dụng.)__")
+    R.h3("Giám sát giao dịch trực tiếp")
+    R.para(f"Màn hình giám sát ({R.next_figure_ref()}) phát lại giao dịch của tập test – dữ liệu mô hình chưa từng "
+           "thấy khi huấn luyện. Mỗi giao dịch có thanh mức rủi ro 0–100 và kết luận “duyệt” hoặc “chặn”; bộ "
+           "đếm cho biết số giao dịch đã kiểm tra, số ca gian lận bắt đúng, báo nhầm, bỏ sót và số tiền gian lận "
+           "đã chặn kịp. Người dùng có thể:")
+    R.bullets([
+        "chọn tốc độ phát lại ×10, ×100, ×1000, hoặc chế độ **từng giao dịch** – mỗi lần bấm “Giao dịch tiếp "
+        "theo” chỉ đi thêm một giao dịch và tự mở phần giải thích, thuận tiện khi trình bày;",
+        "**lọc chỉ các giao dịch nghi gian lận**, kể cả những giao dịch đã trôi khỏi danh sách;",
+        "bấm vào một giao dịch bất kỳ để xem vì sao hệ thống duyệt hoặc chặn giao dịch đó.",
+    ])
+    R.figure("app_giam_sat", "Màn hình giám sát trực tiếp: lọc giao dịch nghi gian lận và giải thích một cảnh báo",
+             folder=ASSETS_DIR)
+    R.h3("Kiểm tra một giao dịch và giải thích kết quả")
+    R.para(f"Ở chế độ kiểm tra ({R.next_figure_ref()}), người dùng lấy ngẫu nhiên một giao dịch, một ca gian lận "
+           "hoặc một ca bình thường từ tập test. Phần giải thích gồm:")
+    R.bullets([
+        "**Kết luận** (nghi gian lận / an toàn), mức rủi ro so với ngưỡng cảnh báo đã tinh chỉnh, và đề xuất "
+        "hành động (tạm giữ và xác minh với chủ thẻ, hoặc duyệt).",
+        "**Ba lý do bằng lời** – hành vi thẻ, giờ giao dịch, số tiền – mỗi lý do có thanh độ lớn và màu cho biết "
+        "đẩy về phía gian lận (đỏ) hay an toàn (xanh), kèm tỉ lệ gian lận thực tế của khung giờ, khoảng tiền đó.",
+        "**Năm giao dịch giống nhất trong quá khứ** cùng kết quả thật của chúng.",
+        "**Thử thay đổi giao dịch:** kéo thanh số tiền, giờ để xem mô hình chấm lại ngay lập tức.",
+        "Nút **“Xem kết quả thật”** lật nhãn thật để đối chiếu mô hình đoán đúng hay sai.",
+    ])
+    R.figure("app_kiem_tra", "Kiểm tra một giao dịch: kết luận, lý do, giao dịch tương tự và thử thay đổi",
+             folder=ASSETS_DIR)
+    R.para("Ứng dụng hỗ trợ giao diện sáng và tối (tự theo cài đặt của hệ điều hành, có nút chuyển đổi). Các "
+           "bước xử lý dữ liệu và huấn luyện hiện được chạy bằng dòng lệnh (run_pipeline.py, tune_models.py); "
+           "hai tab ETL và Huấn luyện & Đánh giá trên giao diện web đang được hoàn thiện.")
 
     R.h2("Hạn chế của giải pháp")
     R.bullets([
@@ -930,6 +965,8 @@ def conclusion(R: Report, d: dict):
     R.bullets([
         "Triển khai xử lý luồng thời gian thực với Kafka và Spark Structured Streaming để chấm điểm giao dịch "
         "ngay khi phát sinh.",
+        "Hoàn thiện tab ETL (theo dõi Spark xử lý song song theo thời gian thực) và tab Huấn luyện & Đánh giá "
+        "trên giao diện web.",
         "Triển khai trên cụm Hadoop/Spark nhiều máy và đánh giá khả năng mở rộng với dữ liệu lớn hơn.",
         "Thử nghiệm các mô hình mạnh hơn như Gradient-Boosted Trees, XGBoost, LightGBM và các mô hình học sâu.",
         "Bổ sung đặc trưng hành vi theo từng thẻ (tần suất, số tiền trung bình gần đây) khi có dữ liệu chưa ẩn "
