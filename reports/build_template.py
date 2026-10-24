@@ -187,6 +187,28 @@ def strip_body(doc) -> None:
             body.remove(el)
 
 
+def set_outline_levels(doc) -> None:
+    """Các kiểu tiêu đề tự tạo của file mẫu (h1-h4, More) không có cấp đề cương -> Word không hiện
+    chúng trong Navigation Pane / outline. Gán cấp đề cương (0 = cấp 1) cho từng kiểu."""
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls
+
+    levels = {"h1": 0, "More": 0, "h2": 1, "h3": 2, "h4": 3}
+    for style_id, level in levels.items():
+        style = doc.styles.element.xpath(f'w:style[@w:styleId="{style_id}"]')[0]
+        pPr = style.find(qn("w:pPr"))
+        for old in pPr.findall(qn("w:outlineLvl")):
+            pPr.remove(old)
+        el = parse_xml(f'<w:outlineLvl {nsdecls("w")} w:val="{level}"/>')
+        # Theo thứ tự lược đồ CT_PPrBase, outlineLvl đứng trước divId/cnfStyle/rPr/sectPr/pPrChange.
+        anchor = next((c for c in pPr if c.tag in {qn("w:divId"), qn("w:cnfStyle"), qn("w:rPr"),
+                                                  qn("w:sectPr"), qn("w:pPrChange")}), None)
+        if anchor is not None:
+            anchor.addprevious(el)
+        else:
+            pPr.append(el)
+
+
 def drop_unused_images(doc) -> None:
     part = doc.part
     used = set(doc.element.xpath("//@r:embed"))
@@ -210,6 +232,7 @@ def main(template_path: str) -> None:
                         marker_paragraph(MARKER_TOF_TABLES))
     strip_body(doc)
     drop_unused_images(doc)
+    set_outline_levels(doc)
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     doc.save(OUTPUT_PATH)

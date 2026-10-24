@@ -995,9 +995,11 @@ def main():
     chapter3(R, d)
     conclusion(R, d)
     references(R)
-    R.save(OUTPUT_PATH)
-    print(f"[Report] Đã sinh báo cáo -> {OUTPUT_PATH}")
-    update_fields_with_word(OUTPUT_PATH)
+    # Tùy chọn: python reports/generate_report.py <đường dẫn ra> (vd. khi final_report.docx đang mở trong Word)
+    out = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else OUTPUT_PATH
+    R.save(out)
+    print(f"[Report] Đã sinh báo cáo -> {out}")
+    update_fields_with_word(out)
 
 
 if __name__ == "__main__":
