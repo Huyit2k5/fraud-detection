@@ -34,6 +34,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 REPORTS_DIR = ROOT_DIR / "reports"
 MODELS_DIR = ROOT_DIR / "models"
 FIG_DIR = REPORTS_DIR / "figures" / "report"
+ASSETS_DIR = REPORTS_DIR / "assets"  # ảnh chụp màn hình thật (trang Kaggle của bộ dữ liệu, giao diện)
 TEMPLATE_PATH = REPORTS_DIR / "template" / "report_template.docx"
 OUTPUT_PATH = REPORTS_DIR / "final_report.docx"
 
@@ -142,8 +143,8 @@ class Report:
         return p, f"{label} {c}.{n}"
 
     # ---------- hình ----------
-    def figure(self, name: str, caption: str, width_cm: float = TEXT_WIDTH_CM) -> str:
-        path = FIG_DIR / f"{name}.png"
+    def figure(self, name: str, caption: str, width_cm: float = TEXT_WIDTH_CM, folder: Path = FIG_DIR) -> str:
+        path = folder / f"{name}.png"
         p = self.doc.add_paragraph(style="Normal")
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p.paragraph_format.first_line_indent = 0
@@ -322,8 +323,17 @@ def chapter1(R: Report, d: dict):
     R.h2("Bộ dữ liệu sử dụng")
     R.h3("Nguồn và quy mô dữ liệu")
     R.para("Đề tài sử dụng bộ dữ liệu **Credit Card Fraud Detection** do nhóm nghiên cứu Machine Learning "
-           "Group – Université Libre de Bruxelles (ULB) phối hợp với Worldline công bố trên Kaggle [1], [2]. "
-           f"Thông tin tổng quan được trình bày trong {R.next_table_ref()}.")
+           "Group – Université Libre de Bruxelles (ULB) phối hợp với Worldline công bố trên Kaggle [1], [2], "
+           "tại địa chỉ https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud. "
+           f"{R.next_figure_ref()} là trang giới thiệu bộ dữ liệu trên Kaggle: các giao dịch thẻ tín dụng của chủ "
+           "thẻ châu Âu trong tháng 9/2013, gồm 492 giao dịch gian lận trên tổng số 284.807 giao dịch.")
+    R.figure("kaggle_dataset", "Trang giới thiệu bộ dữ liệu Credit Card Fraud Detection trên Kaggle",
+             folder=ASSETS_DIR)
+    R.para(f"Bộ dữ liệu gồm một tệp duy nhất creditcard.csv dung lượng 150,83 MB với 31 cột "
+           f"({R.next_figure_ref()}). Nhóm tải tệp này về và đưa lên HDFS để xử lý. Thông tin tổng quan được "
+           f"trình bày trong {R.next_table_ref()}.")
+    R.figure("kaggle_data_explorer", "Tệp creditcard.csv (150,83 MB, 31 cột) trong mục Data Explorer của Kaggle",
+             folder=ASSETS_DIR)
     R.table("Thông tin tổng quan về bộ dữ liệu", ["Thuộc tính", "Giá trị"], [
         ["Nguồn", "Kaggle – mlg-ulb/creditcardfraud (ULB & Worldline)"],
         ["Định dạng", "CSV (Comma-Separated Values), có dòng tiêu đề"],
