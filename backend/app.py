@@ -41,7 +41,7 @@ def _hdfs_ok() -> bool:
 
 def create_app(bundle_dir: Path = INFERENCE_DIR) -> FastAPI:
     app = FastAPI(title="Fraud Detection API")
-    app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    app.add_middleware(CORSMiddleware, allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
                        allow_methods=["*"], allow_headers=["*"])
     state: dict = {"service": None, "error": None}
 

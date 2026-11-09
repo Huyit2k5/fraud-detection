@@ -22,7 +22,7 @@ fraud-detection/
 │   ├── export_inference.py # xuất mô hình tốt nhất dạng JSON + dữ liệu cho giao diện web (models/inference/)
 │   └── visualize.py        # Giai đoạn 6: biểu đồ trực quan
 ├── backend/                # FastAPI: suy luận + giải thích (SHAP) không cần Spark, WebSocket giám sát trực tiếp
-├── frontend/               # Next.js: giao diện web (tab ETL, Huấn luyện & Đánh giá, Suy luận)
+├── frontend/               # Next.js: giao diện web suy luận (giám sát, giải thích giao dịch)
 ├── tests/                  # pytest
 ├── reports/
 │   ├── figures/            # biểu đồ xuất ra
@@ -245,6 +245,6 @@ Script mở 2 cửa sổ: backend `python -m uvicorn backend.app:app --port 8000
   dịch giống nhất trong quá khứ, thử thay đổi số tiền. Có nút chuyển giao diện sáng/tối.
 
 Sau khi chạy lại pipeline, gọi `POST http://localhost:8000/api/reload` (hoặc khởi động lại backend) để nạp mô
-hình mới. Tab ETL và Huấn luyện & Đánh giá đang được xây dựng.
+hình mới.
 
 Kiểm thử: `.venv\Scripts\python -m pytest -q` (backend + pipeline) và `pnpm --dir frontend test`.

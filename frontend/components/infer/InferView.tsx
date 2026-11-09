@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { useStream } from "@/hooks/useStream";
@@ -84,9 +83,6 @@ export function InferView() {
       <section className="mx-auto mt-16 max-w-xl rounded-xl border border-line bg-panel p-6">
         <h1 className="text-lg font-semibold">Chưa có mô hình để suy luận</h1>
         <p className="mt-2 text-sm text-muted">{modelError}</p>
-        <Link href="/train" className="mt-4 inline-block rounded-lg bg-action px-3 py-1.5 text-sm font-semibold text-ink">
-          Sang tab Huấn luyện
-        </Link>
       </section>
     );
   }
