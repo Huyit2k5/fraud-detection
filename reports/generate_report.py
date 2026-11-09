@@ -738,6 +738,30 @@ def chapter3(R: Report, d: dict):
            "một mẫu dữ liệu lấy từ Spark DataFrame. Tham số contamination được nới lên 1% (thay vì đúng bằng tỉ "
            "lệ gian lận) để ngưỡng bất thường đủ rộng, giúp mô hình phát hiện được một phần giao dịch gian lận.")
 
+    # ---- Spark UI: bằng chứng 4 luồng chạy song song (số liệu đọc từ chính các ảnh chụp trong reports/assets)
+    R.h2("Kiểm chứng xử lý song song trên Spark UI")
+    R.para("Trong lúc chạy, Spark cung cấp giao diện theo dõi Spark UI (http://localhost:4040), cho phép quan "
+           "sát trực tiếp các job, stage, task và executor. Nhóm chạy lại bước ETL và huấn luyện Random Forest "
+           f"trong cùng một phiên Spark và chụp lại giao diện này. Trang Executors ({R.next_figure_ref()}) cho "
+           f"thấy phiên chạy ở chế độ local[{s['spark_cores']}] có đúng {s['spark_cores']} lõi xử lý (Cores = "
+           f"{s['spark_cores']}), đã hoàn thành 128 task và không có task nào lỗi.")
+    R.figure("spark_ui_executors", "Trang Executors của Spark UI: 4 lõi xử lý, 128 task hoàn thành",
+             folder=ASSETS_DIR)
+    R.para(f"Biểu đồ Event Timeline của từng stage cho thấy rõ các task chạy song song. Ở bước ETL "
+           f"({R.next_figure_ref()}), stage loại trùng lặp đọc lại {vn(s['clean_rows'])} bản ghi đã được chia thành 7 "
+           "partition: 4 task đầu chạy đồng thời trên 4 luồng, 3 task còn lại được xếp vào ngay khi có luồng "
+           "rảnh. Tổng thời gian tính toán của các task là 10 giây nhưng stage chỉ mất 3 giây.")
+    R.figure("spark_ui_etl_timeline", "Event Timeline của một stage ETL: 7 task, tối đa 4 task chạy cùng lúc",
+             folder=ASSETS_DIR)
+    R.para(f"Ở bước huấn luyện Random Forest ({R.next_figure_ref()}), mỗi vòng tìm điểm chia của các cây là một "
+           f"stage gồm 4 task, mỗi task tính thống kê trên một phần của {vn(s['train_rows'])} giao dịch huấn luyện; cả 4 task "
+           "chạy song song suốt stage. Tổng thời gian tính toán 50 giây được hoàn thành trong 13 giây, nhanh "
+           "gần 4 lần so với chạy tuần tự. Lưu ý SMOTE và Isolation Forest chạy bằng scikit-learn trên một luồng "
+           "nên không xuất hiện trên Spark UI; phần suy luận trong ứng dụng minh họa cũng không dùng Spark mà "
+           "chấm điểm trực tiếp bằng mô hình đã xuất ra (mục Ứng dụng minh họa).")
+    R.figure("spark_ui_rf_timeline", "Event Timeline của một stage huấn luyện Random Forest: 4 task chạy song song",
+             folder=ASSETS_DIR)
+
     # ---- 3.8 Tinh chỉnh
     R.h2("Tinh chỉnh siêu tham số")
     lr_th, rf_th = th["logistic_regression"], th["random_forest"]
@@ -875,8 +899,7 @@ def chapter3(R: Report, d: dict):
     R.figure("app_kiem_tra", "Kiểm tra một giao dịch: kết luận, lý do, giao dịch tương tự và thử thay đổi",
              folder=ASSETS_DIR)
     R.para("Ứng dụng hỗ trợ giao diện sáng và tối (tự theo cài đặt của hệ điều hành, có nút chuyển đổi). Các "
-           "bước xử lý dữ liệu và huấn luyện hiện được chạy bằng dòng lệnh (run_pipeline.py, tune_models.py); "
-           "hai tab ETL và Huấn luyện & Đánh giá trên giao diện web đang được hoàn thiện.")
+           "bước xử lý dữ liệu và huấn luyện được chạy bằng dòng lệnh (run_pipeline.py, tune_models.py).")
 
     R.h2("Hạn chế của giải pháp")
     R.bullets([
@@ -909,8 +932,6 @@ def conclusion(R: Report, d: dict):
     R.bullets([
         "Triển khai xử lý luồng thời gian thực với Kafka và Spark Structured Streaming để chấm điểm giao dịch "
         "ngay khi phát sinh.",
-        "Hoàn thiện tab ETL (theo dõi Spark xử lý song song theo thời gian thực) và tab Huấn luyện & Đánh giá "
-        "trên giao diện web.",
         "Triển khai trên cụm Hadoop/Spark nhiều máy và đánh giá khả năng mở rộng với dữ liệu lớn hơn.",
         "Thử nghiệm các mô hình mạnh hơn như Gradient-Boosted Trees, XGBoost, LightGBM và các mô hình học sâu.",
         "Bổ sung đặc trưng hành vi theo từng thẻ (tần suất, số tiền trung bình gần đây) khi có dữ liệu chưa ẩn "
