@@ -28,3 +28,10 @@ python-docx>=1.1.0
 # Web dashboard (dashboard/app.py) + HDFS pseudo-cluster (src/hdfs_utils.py, scripts/hdfs_bootstrap.py)
 streamlit>=1.38.0
 requests>=2.32.0
+
+# Giải thích mô hình + backend web (backend/) + kiểm thử (tests/)
+shap>=0.51.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pytest>=8.0.0
+httpx>=0.27.0

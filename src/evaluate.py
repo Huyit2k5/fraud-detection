@@ -34,6 +34,7 @@ from sklearn.metrics import (
 )
 
 from config import LABEL_COL, MODEL_FEATURE_COLS, MODELS_DIR, REPORTS_DIR, TEST_PARQUET_PATH, local_uri
+from export_inference import export_inference_bundle
 from spark_etl import get_spark_session
 from train_models import assemble_features
 
@@ -141,6 +142,9 @@ def run_evaluation():
         comparison_df.to_csv(out_path, index=False)
         print(f"\n[Evaluate] Bảng so sánh 3 mô hình đã lưu -> {out_path}")
         print(comparison_df.to_string(index=False))
+
+        # Gói suy luận cho giao diện web (mô hình tốt nhất dạng JSON + dữ liệu local).
+        export_inference_bundle(spark, test_df, comparison_df, thresholds)
 
         return comparison_df
     finally:
